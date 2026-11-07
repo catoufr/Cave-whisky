@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ma Cave à Whisky</title>
+<meta name="description" content="Ma collection de whisky : fiches, photos, notes de dégustation.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#eceeea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121512" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<style>
+/* Layout: one narrow column (phone first). Sticky header with tabs, then a list / detail / form view. */
+:root{
+  --bg:#eceeea; --surface:#fafaf8; --fg:#1a1e1b; --muted:#5b645d; --line:#d3d8d2;
+  --accent:#9c5608; --accent-fg:#ffffff; --accent-soft:#f1e2cb;
+  --st-sealed:#2f6aa6; --st-open:#2f7d44; --st-empty:#6f756f;
+  --danger:#b0352b;
+  --f-display:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-body:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-mono:ui-monospace,'SF Mono',Menlo,Consolas,'Roboto Mono',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121512; --surface:#1b1f1b; --fg:#ecefe9; --muted:#9aa399; --line:#2f352f;
+    --accent:#e2a350; --accent-fg:#1a1206; --accent-soft:#3a2c14;
+    --st-sealed:#7db0e8; --st-open:#7cc58e; --st-empty:#9aa099; --danger:#ee8b80;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121512; --surface:#1b1f1b; --fg:#ecefe9; --muted:#9aa399; --line:#2f352f;
+  --accent:#e2a350; --accent-fg:#1a1206; --accent-soft:#3a2c14;
+  --st-sealed:#7db0e8; --st-open:#7cc58e; --st-empty:#9aa099; --danger:#ee8b80;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
+.app{max-width:720px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-block:14px 10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand h1{font-size:1.6rem;font-weight:700}
+.sub{margin:0;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
+.tabs{display:flex;gap:6px;margin-top:10px}
+.tab{flex:1;padding:9px 8px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:500;font-size:.9rem}
+.tab[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+main{padding-block:16px;display:flex;flex-direction:column;gap:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);font-weight:600;text-decoration:none;font-size:.92rem}
+.btn.ghost{background:transparent;color:var(--fg);border-color:var(--line)}
+.btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+.btn.small{padding:6px 10px;font-size:.82rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{margin:0;color:var(--muted);font-size:.82rem}
+.banner{padding:10px 12px;border-radius:8px;background:var(--accent-soft);font-size:.85rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+/* filters */
+.bar{display:flex;gap:8px}
+.bar input[type=search]{flex:1;min-width:0}
+input[type=text],input[type=search],input[type=number],input[type=url],select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+textarea{min-height:90px;resize:vertical}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld>span{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chk{display:flex;gap:8px;align-items:center;font-size:.9rem}
+.chk input{width:18px;height:18px;accent-color:var(--accent)}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
+/* list */
+#results{display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.item:hover{border-color:var(--accent)}
+.thumb{width:56px;height:72px;border-radius:6px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb svg{width:26px;height:26px}
+.it-name{font-family:var(--f-display);font-weight:600;font-size:1.05rem;line-height:1.2;overflow-wrap:anywhere}
+.it-sub{color:var(--muted);font-size:.82rem;margin-top:2px;overflow-wrap:anywhere}
+.it-tags{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.score{text-align:right;font-family:var(--f-mono);font-size:1.5rem;font-weight:500;line-height:1}
+.score small{display:block;font-size:.65rem;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:.74rem;font-weight:600;color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--c)}
+.st-sealed{--c:var(--st-sealed)}.st-open{--c:var(--st-open)}.st-empty{--c:var(--st-empty)}
+.mark{font-size:.74rem;font-weight:600;color:var(--accent)}
+.empty{padding:32px 16px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty h2{font-size:1.2rem}
+/* detail */
+.photos{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory}
+.photos img{height:260px;max-width:85%;border-radius:10px;scroll-snap-align:start;object-fit:cover;background:var(--accent-soft)}
+.d-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.d-head h2{font-size:1.6rem;line-height:1.15;overflow-wrap:anywhere}
+.big{font-family:var(--f-mono);font-size:2.4rem;line-height:1;text-align:right}
+.big small{display:block;font-size:.7rem;color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 16px;margin:0}
+.facts dt{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.facts dd{margin:2px 0 0;font-weight:500}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;padding:8px 6px;border:0;background:var(--surface);font-size:.85rem;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--c);color:var(--accent-fg)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:.85rem}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.chip.static{background:var(--accent-soft);border-color:transparent}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-row{display:grid;grid-template-columns:minmax(0,9.5rem) 1fr 2ch;gap:10px;align-items:center;font-size:.88rem}
+.track{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.fill{height:100%;background:var(--accent);border-radius:4px}
+.bar-row b{font-family:var(--f-mono);font-weight:500;text-align:right}
+.sec h3{font-size:.8rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:var(--f-body);font-weight:700}
+.links a{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);color:var(--fg);text-decoration:none;overflow-wrap:anywhere}
+.links a:hover{color:var(--accent)}
+.links span{font-family:var(--f-mono);color:var(--muted);white-space:nowrap}
+.notes{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+/* form */
+form{display:flex;flex-direction:column;gap:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.photo-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.ph{position:relative;width:110px;height:140px}
+.ph img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block}
+.ph-x,.x{border:0;background:var(--surface);color:var(--fg);border:1px solid var(--line);width:28px;height:28px;border-radius:50%;line-height:1;font-size:1rem}
+.ph-x{position:absolute;top:4px;right:4px}
+.rate{padding:8px 0;border-bottom:1px solid var(--line)}
+.rate:last-child{border-bottom:0}
+.rate-top{display:flex;align-items:center;gap:10px}
+.rate-top label{flex:1;font-weight:500}
+.rate-top output{font-family:var(--f-mono);font-size:1.1rem;min-width:2ch;text-align:right}
+.rate input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
+.rate.unset input[type=range]{opacity:.45}
+.rate.unset .x{visibility:hidden}
+.ends{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.linkrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.linkrow input:nth-child(2){grid-column:1 / -1;order:3}
+.err{color:var(--danger);font-size:.85rem;margin:0}
+.auto{border-color:var(--accent)!important;background:var(--accent-soft)!important}
+.guess{border-style:dashed!important}
+.tabs .tab{padding-inline:4px;font-size:.84rem}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px;padding:0;border:0}
+.filebtn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.pickbox{max-height:220px;overflow:auto;padding:8px 12px}
+button:disabled{opacity:.55;cursor:default}
+details summary{cursor:pointer;font-weight:600}
+code,pre{font-family:var(--f-mono);font-size:.76rem}
+pre{overflow-x:auto;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0}
+.save{position:sticky;bottom:0;z-index:15;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--line)}
+.save .btn{flex:1}
+.flist{display:flex;flex-direction:column}
+.frow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.frow:last-child{border-bottom:0}
+.frow .nm{flex:1;font-weight:500;overflow-wrap:anywhere}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.88rem;z-index:40;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.item{transition:border-color .15s}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div id="toast" hidden role="status"></div>
+<script src="vendor/jszip.min.js"></script>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+
+var CRITERIA=[
+  {k:'sweet',label:'Sec ↔ Sucré'},
+  {k:'smoke',label:'Fumé / tourbé'},
+  {k:'spice',label:'Épicé'},
+  {k:'cereal',label:'Céréales'},
+  {k:'alcohol',label:'Fort en alcool'},
+  {k:'fruit',label:'Fruité'},
+  {k:'mineral',label:'Minéral (fait saliver)'},
+  {k:'length',label:'Longueur en bouche'},
+  {k:'nose',label:'Nez'},
+  {k:'overall',label:'Avis général'}
+];
+var STATUS={sealed:'Non ouvert',open:'Ouvert',empty:'Vide'};
+var DEFAULT_TYPES=['Single malt','Blended scotch','Blended malt','Single grain','Bourbon','Rye','Whisky japonais','Coffey Malt','Irish whiskey'];
+var DEFAULT_TAGS=['Fumé','Tourbé','Épicé','Fruité','Vanillé','Boisé','Floral','Maritime','Sherry','Doux'];
+var SORTS=[['added','Date d’ajout'],['name','Nom'],['overall','Avis général'],['price','Prix'],['abv','Degré'],['age','Âge indiqué']].concat(CRITERIA.filter(function(c){return c.k!=='overall'}).map(function(c){return [c.k,c.label]}));
+var GLASS='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l-1 7a5 5 0 0 1-3 4.5V19h3v2H8v-2h3v-4.5A5 5 0 0 1 8 10z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+
+var S={whiskies:[],friends:[],view:'list',id:null,draft:null,mode:'pending',loaded:{w:false,f:false},slow:false,
+  filters:{q:'',status:'',type:'',tag:'',friend:'',min:'',fav:false,buy:false},sort:'added',dir:'desc',showFilters:false,confirmDel:false,confirmFriend:null,uploading:false,formError:''};
+var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=null;
+
+/* ---------- storage ---------- */
+/* ---------- storage (IndexedDB sur l'appareil) ---------- */
+var APP_VERSION='0.1',IDBH=null,MEMONLY=false;
+function idbOpen(){return new Promise(function(res,rej){
+  var r=indexedDB.open('cave-whisky',1);
+  r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
+  r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)};r.onblocked=function(){rej(new Error('blocked'))}})}
+function idbAll(col){return new Promise(function(res,rej){var q=IDBH.transaction(col).objectStore(col).getAll();q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})}
+function idbPut(col,obj){return new Promise(function(res,rej){var t=IDBH.transaction(col,'readwrite');t.objectStore(col).put(obj);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error||new Error('abort'))}})}
+function idbDel(col,id){return new Promise(function(res,rej){var t=IDBH.transaction(col,'readwrite');t.objectStore(col).delete(id);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error||new Error('abort'))}})}
+function upsert(col,obj){var a=S[col],i=a.findIndex(function(x){return x.id===obj.id});if(i>=0)a[i]=obj;else a.push(obj)}
+async function put(col,obj){var c=JSON.parse(JSON.stringify(obj));upsert(col,c);if(!MEMONLY)await idbPut(col,c)}
+async function removeDoc(col,id){S[col]=S[col].filter(function(x){return x.id!==id});if(!MEMONLY)await idbDel(col,id)}
+function lastExport(){try{return Number(localStorage.getItem('cave-last-export'))||0}catch(e){return 0}}
+function lastExportText(){var l=lastExport();return l?'Dernier export : '+new Date(l).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})+'.':'Aucun export pour l’instant.'}
+function backupBanner(){
+  if(MEMONLY)return '<div class="banner" role="alert">Le stockage de cet appareil est indisponible : tes fiches ne seront pas conservées. Exporte-les depuis l’onglet Échange.</div>';
+  if(!S.whiskies.length)return '';
+  var l=lastExport(),days=l?Math.floor((Date.now()-l)/864e5):null;
+  if(l&&days<30)return '';
+  return '<div class="banner">'+(l?'Dernière sauvegarde il y a '+days+' jours.':'Aucune sauvegarde pour l’instant.')+' Va dans <b>Échange</b> pour exporter tes fiches.</div>';
+}
+function newId(){return 'w'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+async function boot(){
+  render();
+  try{IDBH=await idbOpen();S.whiskies=await idbAll('whiskies');S.friends=await idbAll('friends')}catch(e){MEMONLY=true}
+  S.mode='local';S.loaded={w:true,f:true};
+  initDownloads();
+  render();
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  try{if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js')}catch(e){}
+}
+
+/* ---------- helpers ---------- */
+function toast(m){var t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){t.hidden=true},3200)}
+function photoSrc(p){return p.id?'/_blob/'+p.id:p.data}
+function num(v){var x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null}
+function find(id){return S.whiskies.find(function(w){return w.id===id})}
+function fr(n,d){return n==null?'':Number(n).toLocaleString('fr-FR',{maximumFractionDigits:d==null?2:d})}
+function friendName(id){var f=S.friends.find(function(x){return x.id===id});return f?f.name:null}
+function summary(){
+  var n=S.whiskies.length;if(!n)return 'Aucune bouteille';
+  var c=function(s){return S.whiskies.filter(function(w){return w.status===s}).length};
+  return n+' bouteille'+(n>1?'s':'')+' · '+c('sealed')+' fermée'+(c('sealed')>1?'s':'')+' · '+c('open')+' ouverte'+(c('open')>1?'s':'')+' · '+c('empty')+' vide'+(c('empty')>1?'s':'');
+}
+
+/* ---------- views ---------- */
+function header(){
+  var cur=S.view==='friends'?'friends':S.view==='exchange'?'exchange':(S.view==='form'&&!S.draft.exists)?'form':'list';
+  var tab=function(k,l){return '<button class="tab" data-act="tab" data-v="'+k+'"'+(cur===k?' aria-current="page"':'')+'>'+l+'</button>'};
+  return '<header class="top"><div class="brand"><h1>Ma cave</h1><p class="sub">'+esc(summary())+'</p></div><nav class="tabs" aria-label="Navigation">'+tab('list','Collection')+tab('form','Ajouter')+tab('friends','Amis')+tab('exchange','Échange')+'</nav></header>';
+}
+function render(){
+  var body;
+  if(S.mode==='pending'||!(S.loaded.w&&S.loaded.f)){
+    body='<div class="empty"><h2>Ouverture de ta cave…</h2><p class="hint">'+(S.slow?'Les données mettent du temps à répondre. Vérifie ta connexion.':'Un instant.')+'</p></div>';
+  }else if(S.view==='list')body=listHTML();
+  else if(S.view==='detail')body=detailHTML();
+  else if(S.view==='form')body=formHTML();
+  else if(S.view==='exchange')body=exchangeHTML();
+  else body=friendsHTML();
+  var banner=(S.view==='list'||MEMONLY)?backupBanner():'';
+  $('#app').innerHTML=header()+'<main>'+banner+body+'</main>';
+  if(S.view==='list'&&S.loaded.w)renderResults();
+  if(S.view==='form')initForm();
+  if(S.view==='exchange'){xbox();ibox()}
+}
+function softRender(){
+  if(S.view==='exchange'){var h2=$('.sub');if(h2)h2.textContent=summary();if(!XP.busy&&!(IM&&IM.busy))xbox();return}
+  if(S.view==='form'){refreshFriendsBox();var h=$('.sub');if(h)h.textContent=summary();return}
+  var a=document.activeElement;
+  if(S.view==='list'&&a&&a.closest&&a.closest('#app')&&/INPUT|SELECT/.test(a.tagName)){renderResults();var s=$('.sub');if(s)s.textContent=summary();return}
+  render();
+}
+function go(view,id){
+  if(readCtl)readCtl.abort();
+  S.view=view;S.id=id||null;S.confirmDel=false;S.confirmFriend=null;S.formError='';
+  if(view==='form')S.draft=newDraft(id);
+  render();window.scrollTo(0,0);
+}
+
+/* list */
+function listHTML(){
+  if(!S.whiskies.length){
+    return '<div class="card empty"><span class="thumb" style="width:56px;height:72px">'+GLASS+'</span><h2>Ta cave est vide</h2><p class="hint">Crée la fiche de ta première bouteille : nom, photo de l’étiquette, tes notes de dégustation.</p><button class="btn" data-act="tab" data-v="form">Ajouter un whisky</button></div>';
+  }
+  var f=S.filters;
+  var types=uniq(S.whiskies.map(function(w){return w.type}));
+  var tags=uniq([].concat.apply([],S.whiskies.map(function(w){return w.tags||[]})));
+  var opt=function(list,val,all){return '<option value="">'+all+'</option>'+list.map(function(x){var v=Array.isArray(x)?x[0]:x,l=Array.isArray(x)?x[1]:x;return '<option value="'+esc(v)+'"'+(String(val)===String(v)?' selected':'')+'>'+esc(l)+'</option>'}).join('')};
+  var fld=function(label,id,html){return '<label class="fld"><span>'+label+'</span><select id="f-'+id+'" data-f="'+id+'">'+html+'</select></label>'};
+  var mins=[[5,'5 et plus'],[6,'6 et plus'],[7,'7 et plus'],[8,'8 et plus'],[9,'9 et plus']];
+  return '<div class="bar"><input type="search" id="f-q" data-f="q" placeholder="Rechercher un nom, une distillerie…" value="'+esc(f.q)+'" aria-label="Rechercher">'+
+    '<button class="btn ghost" data-act="filters" aria-expanded="'+S.showFilters+'">Filtres <span id="fcount"></span></button></div>'+
+    '<div class="card filters"'+(S.showFilters?'':' hidden')+' id="filters">'+
+      fld('Statut','status',opt(Object.keys(STATUS).map(function(k){return [k,STATUS[k]]}),f.status,'Tous'))+
+      fld('Type','type',opt(types,f.type,'Tous'))+
+      fld('Profil','tag',opt(tags,f.tag,'Tous'))+
+      fld('Aimé par','friend',opt(S.friends.map(function(x){return [x.id,x.name]}),f.friend,'Tous'))+
+      fld('Avis général','min',opt(mins,f.min,'Toutes notes'))+
+      '<div class="fld"><span>Marqueurs</span><label class="chk"><input type="checkbox" data-f="fav"'+(f.fav?' checked':'')+'> Préférés</label><label class="chk"><input type="checkbox" data-f="buy"'+(f.buy?' checked':'')+'> À acheter</label></div>'+
+      '<div class="fld"><span>Trier par</span><div class="row" style="flex-wrap:nowrap"><select id="f-sort" data-s="sort">'+SORTS.map(function(s){return '<option value="'+s[0]+'"'+(S.sort===s[0]?' selected':'')+'>'+esc(s[1])+'</option>'}).join('')+'</select><button class="btn ghost small" data-act="dir" aria-label="Inverser l’ordre" id="dirbtn">'+(S.dir==='asc'?'↑':'↓')+'</button></div></div>'+
+      '<div class="fld"><span>&nbsp;</span><button class="btn ghost small" data-act="reset">Réinitialiser</button></div>'+
+    '</div>'+
+    '<div class="meta"><span id="rcount"></span></div><div id="results"></div>';
+}
+function uniq(a){return Array.from(new Set(a.filter(Boolean))).sort(function(x,y){return String(x).localeCompare(String(y),'fr')})}
+function activeFilters(){var f=S.filters,n=0;['status','type','tag','friend','min'].forEach(function(k){if(f[k])n++});if(f.fav)n++;if(f.buy)n++;return n}
+function applyFilters(){
+  var f=S.filters,q=f.q.trim().toLowerCase();
+  var list=S.whiskies.filter(function(w){
+    if(q&&![w.name,w.distillery,w.country,w.type,w.notes].join(' ').toLowerCase().includes(q))return false;
+    if(f.status&&w.status!==f.status)return false;
+    if(f.type&&w.type!==f.type)return false;
+    if(f.tag&&!(w.tags||[]).includes(f.tag))return false;
+    if(f.friend&&!(w.friends||[]).includes(f.friend))return false;
+    if(f.min&&!((w.ratings&&w.ratings.overall)>=Number(f.min)))return false;
+    if(f.fav&&!w.fav)return false;
+    if(f.buy&&!w.buy)return false;
+    return true;
+  });
+  var k=S.sort,dir=S.dir==='asc'?1:-1;
+  var val=function(w){if(k==='added')return w.added||0;if(k==='name')return (w.name||'').toLowerCase();if(k==='price'||k==='abv'||k==='age')return w[k];return w.ratings?w.ratings[k]:null};
+  list.sort(function(a,b){
+    var x=val(a),y=val(b),nx=(x==null),ny=(y==null);
+    if(nx&&ny)return 0;if(nx)return 1;if(ny)return -1;
+    return (typeof x==='string'?x.localeCompare(y,'fr'):x-y)*dir;
+  });
+  return list;
+}
+function itemHTML(w){
+  var ph=w.photos&&w.photos[0];
+  var sub=[w.type,w.country,w.abv!=null?fr(w.abv,1)+' %':''].filter(Boolean).join(' · ');
+  var ov=w.ratings&&w.ratings.overall;
+  return '<button class="item" data-act="open" data-id="'+esc(w.id)+'"><span class="thumb">'+(ph?'<img src="'+esc(photoSrc(ph))+'" alt="" loading="lazy">':GLASS)+'</span>'+
+    '<span><div class="it-name">'+esc(w.name)+'</div><div class="it-sub">'+esc(sub||'—')+'</div><div class="it-tags"><span class="pill st-'+esc(w.status||'sealed')+'">'+esc(STATUS[w.status]||STATUS.sealed)+'</span>'+(w.fav?'<span class="mark">★ préféré</span>':'')+(w.buy?'<span class="mark">◎ à acheter</span>':'')+'</div></span>'+
+    '<span class="score">'+(ov!=null?ov:'–')+'<small>/10</small></span></button>';
+}
+function renderResults(){
+  var el=$('#results');if(!el)return;
+  var list=applyFilters();
+  $('#rcount').textContent=list.length+' / '+S.whiskies.length+(S.whiskies.length>1?' whiskies':' whisky');
+  var n=activeFilters();$('#fcount').textContent=n?'('+n+')':'';
+  el.innerHTML=list.length?list.map(itemHTML).join(''):'<div class="card empty"><h2>Aucun résultat</h2><p class="hint">Aucun whisky ne correspond à ces filtres.</p><button class="btn ghost" data-act="reset">Réinitialiser les filtres</button></div>';
+}
+
+/* detail */
+function detailHTML(){
+  var w=find(S.id);
+  if(!w)return '<div class="card empty"><h2>Fiche introuvable</h2><button class="btn" data-act="tab" data-v="list">Retour à la collection</button></div>';
+  var r=w.ratings||{};
+  var facts=[['Distillerie',w.distillery],['Pays / région',w.country],['Type',w.type],['Âge indiqué',w.age!=null?w.age+' ans':'Sans mention d’âge'],['Degré',w.abv!=null?fr(w.abv,1)+' %':''],['Volume',w.volume!=null?fr(w.volume,1)+' cl':''],['Prix payé',w.price!=null?fr(w.price)+' €':''],['Ajouté le',w.added?new Date(w.added).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'']].filter(function(x){return x[1]});
+  var rated=CRITERIA.filter(function(c){return c.k!=='overall'&&r[c.k]!=null});
+  var liked=(w.friends||[]).map(friendName).filter(Boolean);
+  var links=(w.links||[]);
+  var segs=Object.keys(STATUS).map(function(k){return '<button class="st-'+k+'" data-act="status" data-s="'+k+'" aria-pressed="'+(w.status===k)+'">'+STATUS[k]+'</button>'}).join('');
+  return '<button class="btn ghost small" style="align-self:flex-start" data-act="tab" data-v="list">← Collection</button>'+
+    (w.photos&&w.photos.length?'<div class="photos">'+w.photos.map(function(p,i){return '<img src="'+esc(photoSrc(p))+'" alt="Étiquette '+(i+1)+' de '+esc(w.name)+'">'}).join('')+'</div>':'')+
+    '<div class="d-head"><div><h2>'+esc(w.name)+'</h2><div class="it-tags">'+(w.fav?'<span class="mark">★ préféré</span>':'')+(w.buy?'<span class="mark">◎ à acheter</span>':'')+'</div></div>'+
+      '<div class="big">'+(r.overall!=null?r.overall:'–')+'<small>avis général /10</small></div></div>'+
+    '<div class="seg" role="group" aria-label="Statut de la bouteille">'+segs+'</div>'+
+    (facts.length?'<dl class="facts card">'+facts.map(function(f){return '<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'}).join('')+'</dl>':'')+
+    ((w.tags&&w.tags.length)?'<div class="sec"><h3>Profil annoncé</h3><div class="chips">'+w.tags.map(function(t){return '<span class="chip static">'+esc(t)+'</span>'}).join('')+'</div></div>':'')+
+    '<div class="sec card"><h3>Ma dégustation</h3>'+(rated.length||r.overall!=null?'<div class="bars">'+CRITERIA.filter(function(c){return r[c.k]!=null}).map(function(c){return '<div class="bar-row"><span>'+c.label+'</span><div class="track"><div class="fill" style="width:'+(r[c.k]*10)+'%"></div></div><b>'+r[c.k]+'</b></div>'}).join('')+'</div>':'<p class="hint">Pas encore de note. Utilise Modifier pour la saisir.</p>')+'</div>'+
+    (w.notes?'<div class="sec"><h3>Remarques</h3><p class="notes">'+esc(w.notes)+'</p></div>':'')+
+    '<div class="sec"><h3>Apprécié par</h3>'+(liked.length?'<div class="chips">'+liked.map(function(n){return '<span class="chip static">'+esc(n)+'</span>'}).join('')+'</div>':'<p class="hint">Personne pour l’instant.</p>')+'</div>'+
+    '<div class="sec links"><h3>Avis d’experts</h3>'+links.map(function(l){return '<a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer"><b>'+esc(l.label||l.url)+'</b><span>'+esc(l.note||'')+'</span></a>'}).join('')+'<a href="'+esc(wbQuery(w.name,w.distillery))+'" target="_blank" rel="noopener noreferrer"><b>Chercher sur Whiskybase</b><span>↗</span></a></div>'+
+    '<div class="row"><button class="btn" data-act="edit" data-id="'+esc(w.id)+'">Modifier</button>'+
+    (S.confirmDel?'<button class="btn danger" data-act="delok" data-id="'+esc(w.id)+'">Confirmer la suppression</button><button class="btn ghost" data-act="delno">Annuler</button>':'<button class="btn danger" data-act="del">Supprimer</button>')+'</div>';
+}
+
+/* form */
+function newDraft(id){
+  var w=id?find(id):null;
+  if(w)return {exists:true,id:w.id,added:w.added,tags:(w.tags||[]).slice(),photos:(w.photos||[]).slice(),ratings:Object.assign({},w.ratings||{}),friends:(w.friends||[]).slice(),links:(w.links||[]).map(function(l){return Object.assign({},l)}),w:w};
+  return {exists:false,id:newId(),added:Date.now(),tags:[],photos:[],ratings:{},friends:[],links:[],w:{status:'sealed',volume:70}};
+}
+function formHTML(){
+  var d=S.draft,w=d.w;
+  var inp=function(id,label,val,extra){return '<label class="fld"><span>'+label+'</span><input type="text" id="f-'+id+'" value="'+esc(val)+'" '+(extra||'')+'></label>'};
+  var numI=function(id,label,val,step,extra){return '<label class="fld"><span>'+label+'</span><input type="number" inputmode="decimal" id="f-'+id+'" value="'+(val==null?'':esc(val))+'" step="'+step+'" min="0" '+(extra||'')+'></label>'};
+  var types=uniq(DEFAULT_TYPES.concat(S.whiskies.map(function(x){return x.type})));
+  return '<h2>'+(d.exists?'Modifier la fiche':'Nouveau whisky')+'</h2>'+
+  '<form id="wform" autocomplete="off">'+
+    '<div class="card" style="display:flex;flex-direction:column;gap:12px">'+
+      inp('name','Nom',w.name||'','placeholder="ex. Nikka Coffey Malt" required')+
+      '<details><summary>Coller une fiche préparée avec Claude</summary><p class="hint" style="margin-top:8px">Demande à Claude la fiche d’un whisky « au format import », colle le texte ici, puis vérifie les champs remplis.</p>'+
+      '<textarea id="f-paste" placeholder="Colle le JSON ici" aria-label="Fiche à coller"></textarea>'+
+      '<div class="row" style="margin-top:8px"><button type="button" class="btn ghost small" data-act="paste">Remplir la fiche</button></div>'+
+      '<pre>{"name":"…","distillery":"…","country":"…","type":"…","age":null,"abv":45,"volume":70,"price":null,"profile":["Fruité"],"links":[{"label":"Site","url":"https://…","note":""}]}</pre></details>'+
+      '<div class="grid2">'+inp('distillery','Distillerie',w.distillery||'')+inp('country','Pays / région',w.country||'')+'</div>'+
+      '<label class="fld"><span>Type</span><input type="text" id="f-type" list="types" value="'+esc(w.type||'')+'" placeholder="single malt, blended scotch…"><datalist id="types">'+types.map(function(t){return '<option value="'+esc(t)+'">'}).join('')+'</datalist></label>'+
+      '<div class="grid2">'+numI('age','Âge indiqué (ans)',w.age,1,'placeholder="10, 15… ou rien"')+numI('abv','Degré (%)',w.abv,0.1)+numI('volume','Volume (cl)',w.volume,1)+numI('price','Prix payé (€)',w.price,0.01)+'</div><p class="hint">Âge indiqué : celui écrit sur l’étiquette (10 ans, 15 ans…), pas le temps passé en cave. Laisse vide pour un whisky sans mention d’âge.</p>'+
+      '<label class="fld"><span>Statut</span><select id="f-status">'+Object.keys(STATUS).map(function(k){return '<option value="'+k+'"'+((w.status||'sealed')===k?' selected':'')+'>'+STATUS[k]+'</option>'}).join('')+'</select></label>'+
+      '<div class="row"><label class="chk"><input type="checkbox" id="f-fav"'+(w.fav?' checked':'')+'> Préféré</label><label class="chk"><input type="checkbox" id="f-buy"'+(w.buy?' checked':'')+'> À acheter / à surveiller</label></div>'+
+    '</div>'+
+    '<div class="card sec"><h3>Profil annoncé</h3><div id="tagsbox"></div></div>'+
+    '<div class="card sec"><h3>Photos de l’étiquette</h3><div id="photos"></div></div>'+
+    '<div class="card sec"><h3>Ma dégustation (facultative)</h3><p class="hint" style="margin-bottom:6px">Déplace le curseur pour noter de 0 à 10. Le × efface une note.</p>'+CRITERIA.map(function(c){return rateRow(c,d.ratings[c.k])}).join('')+'</div>'+
+    '<div class="card sec"><h3>Remarques</h3><textarea id="f-notes" placeholder="Annotations libres">'+esc(w.notes||'')+'</textarea></div>'+
+    '<div class="card sec"><h3>Apprécié par</h3><div id="friendsbox"></div></div>'+
+    '<div class="card sec"><h3>Avis d’experts (2 ou 3 liens)</h3><div id="linksbox"></div></div>'+
+    '<p class="err" id="ferr" role="alert">'+esc(S.formError)+'</p>'+
+    '<div class="save"><button type="button" class="btn ghost" data-act="cancel">Annuler</button><button type="submit" class="btn">Enregistrer</button></div>'+
+  '</form>';
+}
+function rateRow(c,val){
+  var set=val!=null;
+  return '<div class="rate'+(set?'':' unset')+'" data-k="'+c.k+'"><div class="rate-top"><label for="r-'+c.k+'">'+c.label+'</label><output id="o-'+c.k+'">'+(set?val:'—')+'</output><button type="button" class="x" data-act="clear" data-k="'+c.k+'" aria-label="Effacer la note '+esc(c.label)+'">×</button></div>'+
+    '<input type="range" id="r-'+c.k+'" min="0" max="10" step="1" value="'+(set?val:5)+'" data-k="'+c.k+'">'+(c.k==='sweet'?'<div class="ends"><span>0 sec</span><span>10 sucré</span></div>':'')+'</div>';
+}
+function initForm(){tagsBox();photosBox();refreshFriendsBox();linksBox()}
+function tagsBox(){
+  var d=S.draft;var all=uniq(DEFAULT_TAGS.concat(S.whiskies.reduce(function(a,w){return a.concat(w.tags||[])},[]),d.tags));
+  $('#tagsbox').innerHTML='<div class="chips">'+all.map(function(t){return '<button type="button" class="chip" data-act="tag" data-t="'+esc(t)+'" aria-pressed="'+d.tags.includes(t)+'">'+esc(t)+'</button>'}).join('')+'</div>'+
+    '<div class="row" style="margin-top:10px"><input type="text" id="f-newtag" placeholder="Autre profil…" style="flex:1" aria-label="Nouveau profil"><button type="button" class="btn ghost small" data-act="addtag">Ajouter</button></div>';
+}
+function photosBox(){
+  var d=S.draft,el=$('#photos');if(!el||!d)return;
+  el.innerHTML=(d.photos.length?'<div class="photo-grid">'+d.photos.map(function(p,i){return '<div class="ph"><img src="'+esc(photoSrc(p))+'" alt="Étiquette '+(i+1)+'"><button type="button" class="ph-x" data-act="rmphoto" data-i="'+i+'" aria-label="Retirer la photo '+(i+1)+'">×</button></div>'}).join('')+'</div>':'')+
+    (d.photos.length<2?'<div class="row"><label class="btn filebtn">Prendre une photo<input type="file" accept="image/*" capture="environment" data-photo="1" aria-label="Prendre une photo"></label><label class="btn ghost filebtn">Choisir une image<input type="file" accept="image/*" data-photo="1" aria-label="Choisir une image dans les fichiers"></label></div>':'<p class="hint">2 photos maximum.</p>')+
+    (S.uploading?'<p class="hint">Envoi de la photo…</p>':'')+
+    (CAN_IMG&&d.photos.length?'<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="read"'+(S.reading?' disabled':'')+'>'+(S.reading?'Lecture de l’étiquette…':'Remplir la fiche depuis la photo')+'</button>'+(S.reading?'<button type="button" class="btn ghost small" data-act="readstop">Arrêter</button>':'')+'</div><p class="hint" style="margin-top:6px">Claude lit l’étiquette et remplit les champs vides. Champs surlignés : remplis par Claude. En pointillés : déduits de ce que Claude connaît du produit, à vérifier. Rien n’est enregistré avant ton clic sur Enregistrer.</p>':'');
+}
+function refreshFriendsBox(){
+  var d=S.draft,el=$('#friendsbox');if(!el||!d)return;
+  el.innerHTML=(S.friends.length?'<div class="chips">'+S.friends.map(function(f){return '<button type="button" class="chip" data-act="friend" data-id="'+esc(f.id)+'" aria-pressed="'+d.friends.includes(f.id)+'">'+esc(f.name)+'</button>'}).join('')+'</div>':'<p class="hint">Ta liste d’amis est vide. Ajoute un prénom ci-dessous.</p>')+
+    '<div class="row" style="margin-top:10px"><input type="text" id="f-newfriend" placeholder="Nouvel ami…" style="flex:1" aria-label="Nouvel ami"><button type="button" class="btn ghost small" data-act="addfriend-form">Ajouter</button></div>';
+}
+function linksBox(){
+  var d=S.draft,el=$('#linksbox');if(!el)return;
+  el.innerHTML=d.links.map(function(l,i){return '<div class="linkrow" data-i="'+i+'"><input type="text" class="l-label" placeholder="Site (ex. Whiskybase)" value="'+esc(l.label||'')+'" aria-label="Nom du site"><input type="text" class="l-note" placeholder="Note (ex. 87/100)" value="'+esc(l.note||'')+'" aria-label="Note de l’expert"><input type="url" class="l-url" placeholder="https://…" value="'+esc(l.url||'')+'" aria-label="Adresse du lien"></div>'}).join('')+
+    '<div class="row" style="margin-top:6px">'+(d.links.length<3?'<button type="button" class="btn ghost small" data-act="addlink">Ajouter un lien</button>':'')+'<a class="btn ghost small" id="wb-link" href="'+esc(wbHref())+'" target="_blank" rel="noopener noreferrer">Chercher sur Whiskybase ↗</a></div><p class="hint" style="margin-top:6px">Ouvre la recherche Whiskybase avec le nom saisi. Copie ensuite l’adresse de la bonne page ici.</p>';
+}
+function readLinks(){
+  return Array.prototype.map.call(document.querySelectorAll('.linkrow'),function(r){
+    var u=r.querySelector('.l-url').value.trim();if(u&&!/^https?:\/\//i.test(u))u='https://'+u;
+    return {label:r.querySelector('.l-label').value.trim(),note:r.querySelector('.l-note').value.trim(),url:u};
+  });
+}
+async function saveForm(){
+  var d=S.draft,v=function(id){return $('#f-'+id).value.trim()};
+  var name=v('name');
+  if(!name){S.formError='Le nom est obligatoire.';$('#ferr').textContent=S.formError;$('#f-name').focus();return}
+  S.formError='';
+  var links=readLinks().filter(function(l){return l.url||l.label}).filter(function(l){return l.url});
+  var obj={id:d.id,name:name,distillery:v('distillery'),country:v('country'),type:v('type'),age:num(v('age')),abv:num(v('abv')),volume:num(v('volume')),price:num(v('price')),
+    status:$('#f-status').value,fav:$('#f-fav').checked,buy:$('#f-buy').checked,tags:d.tags,photos:d.photos,ratings:d.ratings,notes:$('#f-notes').value.trim(),friends:d.friends,links:links,added:d.added};
+  try{await put('whiskies',obj);toast('Fiche enregistrée.');go('detail',obj.id)}
+  catch(e){S.formError='Enregistrement impossible ('+((e&&e.code)||'erreur')+'). Réessaie dans un instant.';var fe=$('#ferr');if(fe)fe.textContent=S.formError}
+}
+function pasteImport(){
+  var raw=$('#f-paste').value.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  var j;try{j=JSON.parse(raw)}catch(e){toast('Texte illisible : colle le JSON complet.');return}
+  var set=function(id,val){var el=$('#f-'+id);if(el&&val!=null&&val!=='')el.value=val};
+  set('name',j.name);set('distillery',j.distillery);set('country',j.country);set('type',j.type);set('age',j.age);set('abv',j.abv);set('volume',j.volume);set('price',j.price);
+  if(Array.isArray(j.profile)){j.profile.forEach(function(t){if(t&&!S.draft.tags.includes(t))S.draft.tags.push(String(t))});tagsBox()}
+  if(Array.isArray(j.links)){S.draft.links=j.links.slice(0,3).map(function(l){return {label:String(l.label||''),url:String(l.url||''),note:String(l.note||'')}});linksBox()}
+  toast('Fiche pré-remplie. Vérifie puis enregistre.');
+}
+
+/* lecture de l’étiquette */
+var LABEL_PROMPT=`Tu aides à remplir la fiche d'une bouteille de whisky à partir de la ou des photos de son étiquette (face avant, éventuellement contre-étiquette).
+Réponds uniquement par un objet JSON de cette forme :
+{"name":string|null,"distillery":string|null,"country":string|null,"type":string|null,"age":number|null,"abv":number|null,"volume":number|null,"profile":string[],"inferred":string[],"unreadable":boolean}
+Règles :
+- name : nom commercial complet tel qu'écrit (marque + cuvée), sans le volume ni le degré.
+- distillery : la distillerie si elle est écrite ou si tu connais ce produit avec certitude.
+- country : pays, avec la région si elle est connue (ex. "Écosse, Speyside", "Japon").
+- type : par exemple "Single malt", "Blended scotch", "Blended malt", "Single grain", "Bourbon", "Whisky japonais", "Coffey Malt".
+- age : nombre d'années si indiqué, sinon null. abv : degré en %. volume : en cl (0,7 L donne 70).
+- profile : au plus 4 mots parmi Fumé, Tourbé, Épicé, Fruité, Vanillé, Boisé, Floral, Maritime, Sherry, Doux, seulement si l'étiquette l'indique ou si tu connais très bien ce produit. Sinon [].
+- N'invente rien : une valeur illisible ou incertaine vaut null. Ne donne aucun prix.
+- inferred : les clés que tu déduis de ta connaissance du produit et que tu n'as pas lues sur l'étiquette (ex. ["distillery","country"]).
+- unreadable : true si les photos ne permettent pas d'identifier le whisky.`;
+async function readLabel(){
+  var d=S.draft;if(!d||!SAMPLE||S.reading||!d.photos.length)return;
+  S.reading=true;photosBox();
+  readCtl=new AbortController();
+  try{
+    var blobs=[];
+    for(var i=0;i<d.photos.length;i++){var p=d.photos[i],b=BLOBS.get(p);if(!b){var r=await fetch(photoSrc(p));b=await r.blob()}blobs.push(b)}
+    var j=await SAMPLE.json(LABEL_PROMPT,{images:blobs,modelTier:'default',signal:readCtl.signal});
+    applyLabel(j);
+  }catch(e){labelError(e)}
+  S.reading=false;readCtl=null;photosBox();
+}
+function applyLabel(j){
+  if(!j||typeof j!=='object'||j.unreadable){toast('Étiquette illisible. Reprends la photo de plus près.');return}
+  var guess=Array.isArray(j.inferred)?j.inferred:[],n=0;
+  var set=function(k,val,force){
+    var el=$('#f-'+k);if(!el||val==null||val==='')return;
+    if(typeof val==='string')val=val.trim();
+    if(el.type==='number'){val=Number(val);if(!isFinite(val)||val<=0)return}
+    if(el.value.trim()!==''&&!force)return;
+    el.value=val;el.classList.add('auto');if(guess.indexOf(k)>=0)el.classList.add('guess');n++;
+  };
+  set('name',j.name);set('distillery',j.distillery);set('country',j.country);set('type',j.type);set('age',j.age);set('abv',j.abv);
+  var vol=$('#f-volume');set('volume',j.volume,vol&&vol.value.trim()==='70');
+  if(Array.isArray(j.profile)){var added=false;j.profile.slice(0,4).forEach(function(t){t=String(t||'').trim();if(t&&!S.draft.tags.includes(t)){S.draft.tags.push(t);added=true;n++}});if(added)tagsBox()}
+  toast(n?'Fiche remplie ('+n+' champ'+(n>1?'s':'')+'). Vérifie avant d’enregistrer.':'Rien de plus à remplir depuis cette photo.');
+}
+function labelError(e){
+  var c=e&&e.code;
+  if(c==='cancelled')return;
+  if(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed','images_unavailable'].indexOf(c)>=0){CAN_IMG=false;toast('Lecture automatique indisponible ici.');return}
+  if(c==='rate_limited')toast('Trop de demandes : réessaie un peu plus tard.');
+  else if(c==='image_rejected')toast('Image refusée. Essaie une autre photo.');
+  else if(c==='invalid_json'||c==='empty_completion'||c==='refused')toast('Étiquette non lue. Reprends la photo de plus près.');
+  else toast('Lecture interrompue. Réessaie.');
+}
+
+/* photos */
+function shrink(file,max,q){return new Promise(function(res,rej){
+  var url=URL.createObjectURL(file),im=new Image();
+  im.onload=function(){var s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);c.toBlob(function(b){b?res(b):rej(new Error('blob'))},'image/jpeg',q)};
+  im.onerror=function(){URL.revokeObjectURL(url);rej(new Error('img'))};im.src=url})}
+function toDataURL(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result)};r.onerror=rej;r.readAsDataURL(b)})}
+async function addPhoto(file){
+  if(!file||!S.draft)return;
+  S.uploading=true;photosBox();
+  try{
+    var p=null;
+    var big=await shrink(file,1400,.82);
+    if(ASSETS){try{var r=await ASSETS.upload(big,{type:'image/jpeg'});p={id:r.id}}catch(e){p=null}}
+    if(!p)p={data:await toDataURL(await shrink(file,720,.7))};
+    BLOBS.set(p,big);
+    if(S.draft)S.draft.photos.push(p);
+  }catch(e){toast('Impossible de lire cette image.')}
+  S.uploading=false;photosBox();
+}
+
+/* friends */
+function friendsHTML(){
+  var count=function(id){return S.whiskies.filter(function(w){return (w.friends||[]).includes(id)}).length};
+  return '<h2>Mes amis</h2><form id="fform" class="card" autocomplete="off"><div class="row" style="flex-wrap:nowrap"><input type="text" id="f-friend" placeholder="Prénom d’un ami proche" aria-label="Prénom" style="flex:1"><button class="btn" type="submit">Ajouter</button></div></form>'+
+    (S.friends.length?'<div class="card flist">'+S.friends.slice().sort(function(a,b){return a.name.localeCompare(b.name,'fr')}).map(function(f){
+      return '<div class="frow"><span class="nm">'+esc(f.name)+'</span><span class="hint">'+count(f.id)+' aimé'+(count(f.id)>1?'s':'')+'</span>'+
+        (S.confirmFriend===f.id?'<button class="btn danger small" data-act="fdelok" data-id="'+esc(f.id)+'">Confirmer</button><button class="btn ghost small" data-act="fdelno">Annuler</button>':'<button class="btn ghost small" data-act="fdel" data-id="'+esc(f.id)+'">Retirer</button>')+'</div>'}).join('')+'</div>':'<p class="hint">Aucun ami pour l’instant. Ajoute ceux avec qui tu partages tes bouteilles : tu pourras ensuite indiquer sur chaque fiche qui l’a apprécié.</p>');
+}
+async function addFriend(name){
+  name=name.trim();if(!name)return false;
+  if(S.friends.some(function(f){return f.name.toLowerCase()===name.toLowerCase()})){toast('Cet ami est déjà dans la liste.');return false}
+  try{await put('friends',{id:newId(),name:name});return true}catch(e){toast('Ajout impossible, réessaie.');return false}
+}
+
+/* ---------- export / import ---------- */
+var DL=null,XP={scope:'all',split:'none',fmt:'auto',photos:true,friends:true,pick:{},busy:false},IM=null;
+async function initDownloads(){
+  DL={save:function(o){return new Promise(function(res){
+    var b=(o.data instanceof Blob)?o.data:new Blob([o.data],{type:'application/json'});
+    var u=URL.createObjectURL(b),a=document.createElement('a');
+    a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(u);res()},1200)})}};
+  if(S.view==='exchange'&&!XP.busy)xbox();
+}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function slug(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'sans-nom'}
+function plural(n,s){return n+' '+s+(n>1?'s':'')}
+function setStat(id,msg){var e=$('#'+id);if(e)e.textContent=msg}
+function srcCanvas(src,max){return new Promise(function(res,rej){
+  var im=new Image();
+  im.onload=function(){var s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c)};
+  im.onerror=function(){rej(new Error('img'))};im.src=src})}
+function canvasBlob(c,q){return new Promise(function(res,rej){c.toBlob(function(b){b?res(b):rej(new Error('blob'))},'image/jpeg',q)})}
+
+function exchangeHTML(){
+  return '<h2>Échange</h2>'+
+    '<div class="card sec"><h3>Exporter</h3><div id="xbox"></div></div>'+
+    '<div class="card sec"><h3>Importer</h3><div id="ibox"></div></div>'+
+    '<p class="hint">Ma cave · version '+APP_VERSION+' · tes fiches sont enregistrées sur cet appareil. Exporte-les régulièrement.</p>';
+}
+
+/* export */
+function xpItems(){
+  if(XP.scope==='none')return [];
+  if(XP.scope==='filtered')return applyFilters();
+  if(XP.scope==='pick')return S.whiskies.filter(function(w){return XP.pick[w.id]});
+  return S.whiskies.slice();
+}
+function xpGroups(items){
+  if(!items.length)return [];
+  var sp=XP.split;
+  if(sp==='none')return [{key:'all',label:'Collection',items:items}];
+  var map={},order=[];
+  items.forEach(function(w){
+    var k,l;
+    if(sp==='status'){k=w.status||'sealed';l=STATUS[k]||STATUS.sealed}
+    else if(sp==='type'){l=w.type||'Sans type';k=l}
+    else if(sp==='marker'){l=w.fav?'Préférés':(w.buy?'À acheter':'Autres');k=l}
+    else{k=w.id;l=w.name}
+    if(!map[k]){map[k]={key:k,label:l,items:[]};order.push(k)}
+    map[k].items.push(w);
+  });
+  return order.map(function(k){return map[k]});
+}
+function xpPlan(){
+  var items=xpItems(),groups=xpGroups(items),g=groups.length;
+  var wf=XP.friends&&S.friends.length>0,zipOK=!!window.JSZip;
+  var fmt=zipOK?XP.fmt:'files';
+  var zip=fmt==='zip'||(fmt==='auto'&&(g+(wf&&g!==1?1:0))>1);
+  var embed=wf&&g===1&&!zip,sep=wf&&!embed;
+  return {items:items,groups:groups,zip:zip,embed:embed,sep:sep,wf:wf,zipOK:zipOK,n:g+(sep?1:0)};
+}
+function xbox(){
+  var el=$('#xbox');if(!el)return;
+  var P=xpPlan();
+  var radio=function(v,l){return '<label class="chk"><input type="radio" name="xscope" data-x="scope" value="'+v+'"'+(XP.scope===v?' checked':'')+'> '+l+'</label>'};
+  var opt=function(v,l,cur){return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>'};
+  var pick='';
+  if(XP.scope==='pick'){
+    pick='<div class="card pickbox">'+(S.whiskies.length?S.whiskies.slice().sort(function(a,b){return a.name.localeCompare(b.name,'fr')}).map(function(w){return '<label class="chk" style="padding:4px 0"><input type="checkbox" data-xp="'+esc(w.id)+'"'+(XP.pick[w.id]?' checked':'')+'> '+esc(w.name)+'</label>'}).join(''):'<p class="hint">Aucune fiche.</p>')+'</div>'+
+      '<div class="row"><button type="button" class="btn ghost small" data-act="xall">Tout cocher</button><button type="button" class="btn ghost small" data-act="xnone">Tout décocher</button></div>';
+  }
+  var plan=P.n?(plural(P.items.length,'fiche')+(P.wf?' + liste d’amis':'')+' · '+plural(P.n,'fichier')+(P.zip?' dans une archive ZIP':'')):'Rien à exporter avec ces choix.';
+  el.innerHTML='<div class="fld"><span>Fiches à exporter</span>'+
+      radio('all','Toute la collection ('+S.whiskies.length+')')+
+      radio('filtered','Les fiches affichées avec les filtres actuels ('+applyFilters().length+')')+
+      radio('pick','Choisir les fiches')+
+      radio('none','Aucune fiche, seulement la liste d’amis')+'</div>'+pick+
+    '<label class="fld"><span>Découper en fichiers</span><select data-x="split">'+
+      opt('none','Un seul fichier',XP.split)+opt('status','Un fichier par statut (non ouvert, ouvert, vide)',XP.split)+opt('type','Un fichier par type de whisky',XP.split)+opt('marker','Un fichier par marqueur (préférés, à acheter, autres)',XP.split)+opt('one','Un fichier par fiche',XP.split)+
+    '</select></label>'+
+    (XP.split==='marker'?'<p class="hint">Un whisky à la fois préféré et à acheter va dans « Préférés ».</p>':'')+
+    '<div class="fld"><label class="chk"><input type="checkbox" data-x="photos"'+(XP.photos?' checked':'')+'> Inclure les photos (fichiers plus lourds)</label>'+
+      '<label class="chk"><input type="checkbox" data-x="friends"'+(XP.friends?' checked':'')+'> Inclure la liste d’amis</label></div>'+
+    '<label class="fld"><span>Format</span><select data-x="fmt"'+(P.zipOK?'':' disabled')+'>'+
+      opt('auto','Automatique (ZIP s’il y a plusieurs fichiers)',XP.fmt)+opt('zip','Une archive ZIP',XP.fmt)+opt('files','Des fichiers JSON séparés',XP.fmt)+
+    '</select></label>'+
+    (P.zipOK?'':'<p class="hint">Les archives ZIP ne sont pas disponibles ici : export en fichiers JSON séparés.</p>')+
+    (XP.fmt==='files'&&P.n>3?'<p class="hint">Chaque fichier demande une confirmation de ta part. Une archive ZIP en demande une seule.</p>':'')+
+    '<p class="hint" id="xplan">'+esc(plan)+'</p>'+
+    '<div class="row"><button type="button" class="btn" data-act="export"'+((!DL||XP.busy||!P.n)?' disabled':'')+'>'+(XP.busy?'Export en cours…':'Exporter')+'</button></div>'+
+    '<p class="hint" id="xstat">'+lastExportText()+'</p>';
+}
+async function photoToData(p){return p.data?p.data:(await srcCanvas(photoSrc(p),1400)).toDataURL('image/jpeg',.82)}
+async function exportWhisky(w){
+  var ph=[];
+  if(XP.photos){for(var i=0;i<(w.photos||[]).length;i++){try{ph.push(await photoToData(w.photos[i]))}catch(e){}}}
+  return {id:w.id,name:w.name,distillery:w.distillery||'',country:w.country||'',type:w.type||'',age:w.age==null?null:w.age,abv:w.abv==null?null:w.abv,volume:w.volume==null?null:w.volume,price:w.price==null?null:w.price,
+    status:w.status||'sealed',fav:!!w.fav,buy:!!w.buy,tags:w.tags||[],photos:ph,ratings:w.ratings||{},notes:w.notes||'',
+    friends:(w.friends||[]).map(friendName).filter(Boolean),links:w.links||[],added:w.added||null};
+}
+async function makePayload(items,withFriends){
+  var o={format:'cave-whisky',version:1,exported:new Date().toISOString()};
+  if(items){o.whiskies=[];for(var i=0;i<items.length;i++)o.whiskies.push(await exportWhisky(items[i]))}
+  if(withFriends)o.friends=S.friends.map(function(f){return {name:f.name}});
+  return o;
+}
+async function runExport(){
+  if(!DL||XP.busy)return;
+  var P=xpPlan();if(!P.n){toast('Rien à exporter.');return}
+  XP.busy=true;xbox();
+  try{
+    var files=[],used={},td=today();
+    for(var i=0;i<P.groups.length;i++){
+      var gr=P.groups[i];
+      setStat('xstat','Préparation '+(i+1)+'/'+P.groups.length+'…');
+      var base='cave-whisky-'+slug(XP.split==='none'?td:gr.label),nm=base,k=2;
+      while(used[nm]){nm=base+'-'+(k++)}
+      used[nm]=1;
+      files.push({name:nm+'.json',obj:await makePayload(gr.items,P.embed)});
+    }
+    if(P.sep)files.push({name:'cave-whisky-amis.json',obj:await makePayload(null,true)});
+    if(P.zip){
+      setStat('xstat','Création de l’archive…');
+      var z=new JSZip();files.forEach(function(f){z.file(f.name,JSON.stringify(f.obj))});
+      var blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});
+      await DL.save({filename:'cave-whisky-'+td+'.zip',data:blob});
+    }else{
+      for(var j=0;j<files.length;j++){
+        setStat('xstat','Fichier '+(j+1)+'/'+files.length+'…');
+        await DL.save({filename:files[j].name,data:JSON.stringify(files[j].obj,null,1)});
+      }
+    }
+    try{localStorage.setItem('cave-last-export',String(Date.now()))}catch(e){}
+    toast('Export terminé.');
+  }catch(e){toast(e&&e.code==='declined'?'Export annulé.':'Export impossible'+(e&&e.message?' ('+e.message+')':'.'))}
+  XP.busy=false;xbox();
+}
+
+/* import */
+function normW(r){
+  if(!r||typeof r!=='object')return null;
+  var s=function(v){return v==null?'':String(v).trim()},arr=function(v){return Array.isArray(v)?v:[]};
+  var name=s(r.name);if(!name)return null;
+  var rt={};
+  if(r.ratings&&typeof r.ratings==='object'){CRITERIA.forEach(function(c){var raw=r.ratings[c.k],v=Number(raw);if(raw!=null&&raw!==''&&isFinite(v))rt[c.k]=Math.max(0,Math.min(10,Math.round(v)))})}
+  var tags=Array.from(new Set(arr(r.tags).concat(arr(r.profile)).map(s).filter(Boolean))).slice(0,12);
+  var photos=arr(r.photos).map(function(p){return typeof p==='string'?p:(p&&p.data)}).filter(function(p){return typeof p==='string'&&/^data:image\/(jpeg|png|webp|gif);base64,/.test(p)}).slice(0,2);
+  var links=arr(r.links).map(function(l){return {label:s(l&&l.label),url:s(l&&l.url),note:s(l&&l.note)}}).filter(function(l){return /^https?:\/\//i.test(l.url)}).slice(0,3);
+  var pos=function(v){var x=num(v);return x!=null&&x>0?x:null};
+  var price=num(r.price),added=Number(r.added),id=s(r.id);
+  return {id:/^[A-Za-z0-9_-]{1,60}$/.test(id)?id:null,name:name,distillery:s(r.distillery),country:s(r.country),type:s(r.type),
+    age:pos(r.age),abv:pos(r.abv),volume:pos(r.volume),price:(price!=null&&price>=0)?price:null,
+    status:Object.prototype.hasOwnProperty.call(STATUS,r.status)?r.status:'sealed',fav:!!r.fav,buy:!!r.buy,tags:tags,photos:photos,ratings:rt,notes:s(r.notes),
+    friendNames:arr(r.friends).map(function(f){return s(f&&typeof f==='object'?f.name:f)}).filter(Boolean),links:links,added:(isFinite(added)&&added>0)?added:Date.now()};
+}
+function wKey(w){return (String(w.name||'')+'|'+String(w.distillery||'')).trim().toLowerCase()}
+function absorb(label,txt){
+  var j;try{j=JSON.parse(String(txt).replace(/^﻿/,''))}catch(e){IM.files.push({name:label,err:'Contenu illisible (JSON invalide).'});return}
+  var ws=[],fr=[];
+  if(Array.isArray(j))ws=j;
+  else if(j&&typeof j==='object'){
+    if(Array.isArray(j.whiskies)){ws=j.whiskies;if(Array.isArray(j.friends))fr=j.friends}
+    else if(j.name)ws=[j];
+    else if(Array.isArray(j.friends))fr=j.friends;
+    else{IM.files.push({name:label,err:'Format non reconnu.'});return}
+  }else{IM.files.push({name:label,err:'Format non reconnu.'});return}
+  var ok=0,bad=0;
+  ws.forEach(function(r){var w=normW(r);if(w){IM.raw.push(w);ok++}else bad++});
+  var fn=fr.map(function(f){return String(f&&typeof f==='object'?f.name:f||'').trim()}).filter(Boolean);
+  fn.forEach(function(n){IM.fr.push(n)});
+  IM.files.push({name:label,count:ok,bad:bad,friends:fn.length});
+}
+async function readImportFiles(files){
+  if(IM&&IM.busy)return;
+  IM={files:[],raw:[],fr:[],items:[],friendsNew:[],dup:(IM&&IM.dup)||'skip',busy:true,msg:'Lecture des fichiers…',done:null};
+  ibox();
+  for(var i=0;i<files.length;i++){
+    var f=files[i],low=f.name.toLowerCase();
+    try{
+      if(/\.zip$/.test(low)){
+        if(!window.JSZip){IM.files.push({name:f.name,err:'Lecture des ZIP indisponible ici.'});continue}
+        var z=await JSZip.loadAsync(f);
+        var names=Object.keys(z.files).filter(function(n){return !z.files[n].dir&&/\.json$/i.test(n)&&!/(^|\/)__MACOSX\//.test(n)&&!/(^|\/)\./.test(n)});
+        if(!names.length)IM.files.push({name:f.name,err:'Aucun fichier .json dans cette archive.'});
+        for(var k=0;k<names.length;k++)absorb(f.name+' › '+names[k],await z.files[names[k]].async('string'));
+      }else absorb(f.name,await f.text());
+    }catch(e){IM.files.push({name:f.name,err:'Fichier illisible.'})}
+  }
+  var seen={},exId={},exKey={};
+  S.whiskies.forEach(function(w){exId[w.id]=w.id;exKey[wKey(w)]=w.id});
+  IM.raw.forEach(function(w){
+    var key=wKey(w);
+    if((w.id&&seen['i:'+w.id])||seen['k:'+key]){IM.skipIn=(IM.skipIn||0)+1;return}
+    if(w.id)seen['i:'+w.id]=1;seen['k:'+key]=1;
+    w._ex=(w.id&&exId[w.id])||exKey[key]||null;
+    IM.items.push(w);
+  });
+  var have={};S.friends.forEach(function(f){have[f.name.toLowerCase()]=1});
+  var names=IM.fr.slice();IM.items.forEach(function(w){w.friendNames.forEach(function(n){names.push(n)})});
+  var added={};IM.friendsNew=[];
+  names.forEach(function(n){var k=n.toLowerCase();if(!have[k]&&!added[k]){added[k]=1;IM.friendsNew.push(n)}});
+  IM.busy=false;IM.msg='';ibox();
+}
+function ibox(){
+  var el=$('#ibox');if(!el)return;
+  var h='<p class="hint">Choisis un ou plusieurs fichiers .json, ou une archive .zip. Les fiches au format « Coller une fiche » sont acceptées aussi.</p>'+
+    '<div class="row"><label class="btn filebtn'+(IM&&IM.busy?' ghost':'')+'">Choisir des fichiers<input type="file" id="imp-file" accept=".json,.zip,application/json,application/zip,application/x-zip-compressed" multiple aria-label="Choisir des fichiers à importer"></label></div>';
+  if(IM&&IM.busy){h+='<p class="hint" id="istat">'+esc(IM.msg||'…')+'</p>'}
+  else if(IM&&IM.done){
+    var d=IM.done;
+    h+='<div class="banner" role="status">Import terminé : '+plural(d.added,'fiche')+' ajoutée'+(d.added>1?'s':'')+(d.replaced?', '+plural(d.replaced,'fiche')+' remplacée'+(d.replaced>1?'s':''):'')+(d.skipped?', '+plural(d.skipped,'doublon')+' ignoré'+(d.skipped>1?'s':''):'')+(d.failed?', '+plural(d.failed,'erreur'):'')+(d.friends?', '+plural(d.friends,'ami')+' ajouté'+(d.friends>1?'s':''):'')+'.</div>'+
+      '<div class="row"><button type="button" class="btn" data-act="imdone">Voir la collection</button></div>';
+  }else if(IM){
+    var nNew=IM.items.filter(function(w){return !w._ex}).length,nDup=IM.items.length-nNew;
+    h+='<div class="flist">'+IM.files.map(function(f){return '<div class="frow"><span class="nm">'+esc(f.name)+'</span>'+(f.err?'<span class="err">'+esc(f.err)+'</span>':'<span class="hint">'+plural(f.count,'fiche')+(f.friends?' · '+plural(f.friends,'ami'):'')+(f.bad?' · '+f.bad+' sans nom':'')+'</span>')+'</div>'}).join('')+'</div>';
+    h+='<p><b>'+plural(IM.items.length,'fiche')+'</b> à importer : '+nNew+' nouvelle'+(nNew>1?'s':'')+(nDup?', '+nDup+' déjà présente'+(nDup>1?'s':''):'')+(IM.skipIn?' ('+plural(IM.skipIn,'doublon')+' ignoré'+(IM.skipIn>1?'s':'')+' dans les fichiers)':'')+'.'+(IM.friendsNew.length?' '+(IM.friendsNew.length>1?IM.friendsNew.length+' nouveaux amis':'1 nouvel ami')+' à créer.':'')+'</p>';
+    if(nDup){
+      var rd=function(v,l){return '<label class="chk"><input type="radio" name="imdup" data-im="dup" value="'+v+'"'+(IM.dup===v?' checked':'')+'> '+l+'</label>'};
+      h+='<div class="fld"><span>Fiches déjà présentes (même identifiant, ou même nom et distillerie)</span>'+rd('skip','Les ignorer')+rd('replace','Les remplacer par la version importée')+rd('both','Garder les deux')+'</div>';
+    }
+    h+='<div class="row"><button type="button" class="btn" data-act="import"'+((IM.items.length||IM.friendsNew.length)?'':' disabled')+'>Importer</button><button type="button" class="btn ghost" data-act="imcancel">Annuler</button></div>';
+  }
+  el.innerHTML=h;
+}
+async function importPhoto(uri){
+  var c=await srcCanvas(uri,1400);
+  if(ASSETS){try{var r=await ASSETS.upload(await canvasBlob(c,.82),{type:'image/jpeg'});return {id:r.id}}catch(e){}}
+  return {data:(await srcCanvas(uri,720)).toDataURL('image/jpeg',.7)};
+}
+async function runImport(){
+  if(!IM||IM.busy||IM.done)return;
+  IM.busy=true;IM.msg='Import en cours…';ibox();
+  var res={added:0,replaced:0,skipped:0,failed:0,friends:0};
+  var fmap={};S.friends.forEach(function(f){fmap[f.name.toLowerCase()]=f.id});
+  var ensure=async function(name){
+    name=String(name||'').trim();if(!name)return null;
+    var k=name.toLowerCase();if(fmap[k])return fmap[k];
+    var id=newId();await put('friends',{id:id,name:name});fmap[k]=id;res.friends++;return id;
+  };
+  try{
+    for(var a=0;a<IM.friendsNew.length;a++)await ensure(IM.friendsNew[a]);
+    for(var i=0;i<IM.items.length;i++){
+      var it=IM.items[i],pol=IM.dup;
+      setStat('istat','Import '+(i+1)+'/'+IM.items.length+'…');
+      if(it._ex&&pol==='skip'){res.skipped++;continue}
+      var replace=!!it._ex&&pol==='replace';
+      var id=replace?it._ex:((!it._ex&&it.id&&!find(it.id))?it.id:newId());
+      try{
+        var photos=[];
+        for(var p=0;p<it.photos.length;p++){try{photos.push(await importPhoto(it.photos[p]))}catch(e){}}
+        var old=replace?find(id):null;
+        if(old&&!photos.length)photos=old.photos||[];
+        var fr=[];
+        for(var n=0;n<it.friendNames.length;n++){var fid=await ensure(it.friendNames[n]);if(fid&&fr.indexOf(fid)<0)fr.push(fid)}
+        await put('whiskies',{id:id,name:it.name,distillery:it.distillery,country:it.country,type:it.type,age:it.age,abv:it.abv,volume:it.volume,price:it.price,status:it.status,fav:it.fav,buy:it.buy,tags:it.tags,photos:photos,ratings:it.ratings,notes:it.notes,friends:fr,links:it.links,added:it.added});
+        if(replace)res.replaced++;else res.added++;
+      }catch(e){res.failed++}
+    }
+  }catch(e){toast('Import interrompu'+(e&&e.code?' ('+e.code+')':'.'))}
+  IM.busy=false;IM.done=res;
+  var h=$('.sub');if(h)h.textContent=summary();
+  ibox();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;
+  var a=b.dataset.act,d=S.draft;
+  switch(a){
+    case 'tab':go(b.dataset.v==='form'?'form':b.dataset.v);break;
+    case 'open':go('detail',b.dataset.id);break;
+    case 'edit':go('form',b.dataset.id);break;
+    case 'cancel':if(d&&d.exists)go('detail',d.id);else go('list');break;
+    case 'filters':S.showFilters=!S.showFilters;$('#filters').hidden=!S.showFilters;b.setAttribute('aria-expanded',S.showFilters);break;
+    case 'dir':S.dir=S.dir==='asc'?'desc':'asc';b.textContent=S.dir==='asc'?'↑':'↓';renderResults();break;
+    case 'reset':S.filters={q:'',status:'',type:'',tag:'',friend:'',min:'',fav:false,buy:false};S.sort='added';S.dir='desc';render();break;
+    case 'status':{var w=find(S.id);if(w&&w.status!==b.dataset.s){try{await put('whiskies',Object.assign({},w,{status:b.dataset.s}));render()}catch(err){toast('Modification impossible.')}}break}
+    case 'del':S.confirmDel=true;render();break;
+    case 'delno':S.confirmDel=false;render();break;
+    case 'delok':try{await removeDoc('whiskies',b.dataset.id);toast('Fiche supprimée.');go('list')}catch(err){toast('Suppression impossible.')}break;
+    case 'tag':{var t=b.dataset.t,i=d.tags.indexOf(t);if(i>=0)d.tags.splice(i,1);else d.tags.push(t);b.setAttribute('aria-pressed',i<0);break}
+    case 'addtag':{var el=$('#f-newtag'),v=el.value.trim();if(v){if(!d.tags.includes(v))d.tags.push(v);tagsBox()}break}
+    case 'friend':{var id=b.dataset.id,j=d.friends.indexOf(id);if(j>=0)d.friends.splice(j,1);else d.friends.push(id);b.setAttribute('aria-pressed',j<0);break}
+    case 'addfriend-form':{var inp=$('#f-newfriend');if(await addFriend(inp.value)){refreshFriendsBox();var nf=S.friends.find(function(f){return f.name.toLowerCase()===inp.value.trim().toLowerCase()});if(nf&&S.draft&&!S.draft.friends.includes(nf.id))S.draft.friends.push(nf.id);refreshFriendsBox()}break}
+    case 'rmphoto':d.photos.splice(Number(b.dataset.i),1);photosBox();break;
+    case 'clear':{var k=b.dataset.k;delete d.ratings[k];var row=document.querySelector('.rate[data-k="'+k+'"]');row.classList.add('unset');$('#o-'+k).textContent='—';$('#r-'+k).value=5;break}
+    case 'addlink':d.links=readLinks();d.links.push({label:'',url:'',note:''});linksBox();break;
+    case 'paste':pasteImport();break;
+    case 'read':readLabel();break;
+    case 'readstop':if(readCtl)readCtl.abort();break;
+    case 'export':runExport();break;
+    case 'xall':S.whiskies.forEach(function(w){XP.pick[w.id]=true});xbox();break;
+    case 'xnone':XP.pick={};xbox();break;
+    case 'import':runImport();break;
+    case 'imcancel':IM=null;ibox();break;
+    case 'imdone':IM=null;go('list');break;
+    case 'fdel':S.confirmFriend=b.dataset.id;render();break;
+    case 'fdelno':S.confirmFriend=null;render();break;
+    case 'fdelok':try{await removeDoc('friends',b.dataset.id);S.confirmFriend=null;render()}catch(err){toast('Suppression impossible.')}break;
+  }
+});
+function rateSet(el){
+  if(!el.matches||!el.matches('.rate input[type=range]'))return;
+  var k=el.dataset.k,v=Number(el.value);S.draft.ratings[k]=v;
+  document.querySelector('.rate[data-k="'+k+'"]').classList.remove('unset');$('#o-'+k).textContent=v;
+}
+['input','change','pointerup'].forEach(function(ev){document.addEventListener(ev,function(e){rateSet(e.target)})});
+document.addEventListener('input',function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.f){var k=t.dataset.f;S.filters[k]=t.type==='checkbox'?t.checked:t.value;renderResults()}
+  else if(t.dataset&&t.dataset.s){S.sort=t.value;renderResults()}
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.photo){var f=t.files&&t.files[0];t.value='';addPhoto(f)}
+  else if(t.dataset&&t.dataset.f&&t.tagName==='SELECT'){S.filters[t.dataset.f]=t.value;renderResults()}
+});
+document.addEventListener('submit',async function(e){
+  e.preventDefault();
+  if(e.target.id==='wform')saveForm();
+  else if(e.target.id==='fform'){var i=$('#f-friend');if(await addFriend(i.value)){render();var n=$('#f-friend');if(n)n.focus()}}
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&e.target.id==='f-newtag'){e.preventDefault();var b=document.querySelector('[data-act="addtag"]');if(b)b.click()}
+  if(e.key==='Enter'&&e.target.id==='f-newfriend'){e.preventDefault();var c=document.querySelector('[data-act="addfriend-form"]');if(c)c.click()}
+});
+
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id==='imp-file'){var fs=Array.prototype.slice.call(t.files||[]);t.value='';if(fs.length)readImportFiles(fs);return}
+  if(t.dataset&&t.dataset.x){XP[t.dataset.x]=(t.type==='checkbox')?t.checked:t.value;xbox();return}
+  if(t.dataset&&t.dataset.xp){XP.pick[t.dataset.xp]=t.checked;var pb=$('.pickbox'),sc=pb?pb.scrollTop:0;xbox();pb=$('.pickbox');if(pb)pb.scrollTop=sc;return}
+  if(t.dataset&&t.dataset.im==='dup'&&IM){IM.dup=t.value}
+});
+function wbQuery(name,dist){var q=String(name||'').trim();dist=String(dist||'').trim();if(dist&&q.toLowerCase().indexOf(dist.toLowerCase())<0)q=dist+' '+q;return 'https://www.whiskybase.com/search?q='+encodeURIComponent(q)}
+function wbHref(){var n=$('#f-name'),d=$('#f-distillery');return wbQuery(n&&n.value,d&&d.value)}
+function wbSync(){var a=$('#wb-link');if(a)a.href=wbHref()}
+document.addEventListener('input',function(e){var id=e.target&&e.target.id;if(id==='f-name'||id==='f-distillery')wbSync()});
+['pointerdown','focusin'].forEach(function(ev){document.addEventListener(ev,function(e){if(e.target&&e.target.id==='wb-link')wbSync()})});
+document.addEventListener('input',function(e){var t=e.target;if(t&&t.classList&&t.classList.contains('auto'))t.classList.remove('auto','guess')});
+boot();
+})();
+</script>
+</body>
+</html>
