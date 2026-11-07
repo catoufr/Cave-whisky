@@ -57,6 +57,8 @@ button{cursor:pointer}
 .brand h1{font-size:1.6rem;font-weight:700}
 .sub{margin:0;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
 .tabs{display:flex;gap:6px;margin-top:10px}
+.tabdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:5px;vertical-align:middle}
+.tab[aria-current="page"] .tabdot{background:var(--accent-fg)}
 .tab{flex:1;padding:9px 8px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:500;font-size:.9rem}
 .tab[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 main{padding-block:16px;display:flex;flex-direction:column;gap:16px}
@@ -201,7 +203,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.1',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.2',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -210,8 +212,8 @@ function idbAll(col){return new Promise(function(res,rej){var q=IDBH.transaction
 function idbPut(col,obj){return new Promise(function(res,rej){var t=IDBH.transaction(col,'readwrite');t.objectStore(col).put(obj);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error||new Error('abort'))}})}
 function idbDel(col,id){return new Promise(function(res,rej){var t=IDBH.transaction(col,'readwrite');t.objectStore(col).delete(id);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error||new Error('abort'))}})}
 function upsert(col,obj){var a=S[col],i=a.findIndex(function(x){return x.id===obj.id});if(i>=0)a[i]=obj;else a.push(obj)}
-async function put(col,obj){var c=JSON.parse(JSON.stringify(obj));upsert(col,c);if(!MEMONLY)await idbPut(col,c)}
-async function removeDoc(col,id){S[col]=S[col].filter(function(x){return x.id!==id});if(!MEMONLY)await idbDel(col,id)}
+async function put(col,obj){var c=JSON.parse(JSON.stringify(obj));c.upd=Date.now();upsert(col,c);if(!MEMONLY)await idbPut(col,c)}
+async function removeDoc(col,id){addTomb(col==='whiskies'?'w':'f',id,Date.now());S[col]=S[col].filter(function(x){return x.id!==id});if(!MEMONLY)await idbDel(col,id)}
 function lastExport(){try{return Number(localStorage.getItem('cave-last-export'))||0}catch(e){return 0}}
 function lastExportText(){var l=lastExport();return l?'Dernier export : '+new Date(l).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})+'.':'Aucun export pour l’instant.'}
 function backupBanner(){
@@ -233,6 +235,138 @@ async function boot(){
   try{if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js')}catch(e){}
 }
 
+/* ---------- synchronisation Google Drive (espace caché de l'appli) ---------- */
+/* Une fiche = un fichier sur le Drive (w_<id>.json), un ami = f_<id>.json, une suppression = x_<col>_<id>.
+   Fusion fiche par fiche : la modification la plus récente gagne. */
+var GCLIENT='163280160875-e3ml082aeieji23312rj1cad07u87fcv.apps.googleusercontent.com';
+var GSCOPE='https://www.googleapis.com/auth/drive.appdata';
+var SYKEY='cave-sync-v1',TOMBKEY='cave-tomb-v1',AUTOKEY='cave-autosync';
+var G={busy:false,msg:'',tok:'',exp:0,report:null,pending:false};
+function lsGet(k,def){try{var v=JSON.parse(localStorage.getItem(k));return v==null?def:v}catch(e){return def}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function syncInfo(){return lsGet(SYKEY,{})}
+function devName(){try{return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)?'téléphone':'PC'}catch(e){return 'appareil'}}
+function fmtDT(v){try{return new Date(v).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}catch(e){return String(v||'')}}
+function tombs(){return lsGet(TOMBKEY,{})}
+function addTomb(col,id,ts){var t=tombs();t[col+':'+id]=ts;lsSet(TOMBKEY,t)}
+function updOf(o){return Number(o&&o.upd)||Number(o&&o.added)||0}
+function lastChange(){var m=0;S.whiskies.concat(S.friends).forEach(function(o){var u=Number(o.upd)||0;if(u>m)m=u});var t=tombs();Object.keys(t).forEach(function(k){if(t[k]>m)m=t[k]});return m}
+function syncDirty(){var i=syncInfo();return !!i.at&&lastChange()>i.at}
+function loadGsi(){return new Promise(function(res,rej){
+  if(window.google&&google.accounts&&google.accounts.oauth2)return res();
+  var s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;
+  s.onload=function(){res()};s.onerror=function(){rej(new Error('offline'))};document.head.appendChild(s)})}
+function gToken(){
+  if(G.tok&&Date.now()<G.exp)return Promise.resolve(G.tok);
+  return new Promise(function(resolve,reject){
+    var tc=google.accounts.oauth2.initTokenClient({client_id:GCLIENT,scope:GSCOPE,
+      callback:function(r){if(r&&r.access_token){G.tok=r.access_token;G.exp=Date.now()+((r.expires_in||3600)-120)*1000;resolve(G.tok)}else reject(new Error((r&&r.error)||'auth'))},
+      error_callback:function(e){reject(new Error((e&&e.type)||'auth'))}});
+    tc.requestAccessToken({prompt:''})})}
+async function dFetch(tok,url,opt){
+  opt=opt||{};var r=await fetch(url,Object.assign({},opt,{headers:Object.assign({Authorization:'Bearer '+tok},opt.headers||{})}));
+  if(!r.ok){var t=await r.text().catch(function(){return''});throw new Error('drive '+r.status+' '+t.slice(0,160))}
+  return r}
+async function dList(tok){
+  var out=[],pt='';
+  do{var r=await dFetch(tok,'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields='+encodeURIComponent('nextPageToken,files(id,name,appProperties)')+(pt?'&pageToken='+encodeURIComponent(pt):''));
+    var j=await r.json();out=out.concat(j.files||[]);pt=j.nextPageToken||''}while(pt);
+  return out}
+async function dPut(tok,id,name,upd,body){
+  var b='cave'+Date.now()+Math.random().toString(36).slice(2),meta={name:name,appProperties:{upd:String(upd)}};
+  if(!id)meta.parents=['appDataFolder'];
+  var mp='--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+b+'\r\nContent-Type: application/json\r\n\r\n'+body+'\r\n--'+b+'--';
+  var url='https://www.googleapis.com/upload/drive/v3/files'+(id?'/'+id:'')+'?uploadType=multipart&fields=id';
+  var r=await dFetch(tok,url,{method:id?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body:mp});
+  return r.json()}
+async function dGet(tok,id){return (await dFetch(tok,'https://www.googleapis.com/drive/v3/files/'+id+'?alt=media')).json()}
+async function dDel(tok,id){try{await dFetch(tok,'https://www.googleapis.com/drive/v3/files/'+id,{method:'DELETE'})}catch(e){if(!/drive 404/.test(e.message))throw e}}
+async function putRaw(col,obj){upsert(col,obj);if(!MEMONLY)await idbPut(col,obj)}
+async function pool(tasks,n,onStep){var i=0,done=0;
+  await Promise.all(Array.from({length:Math.min(n,tasks.length)},async function(){while(i<tasks.length){var t=tasks[i++];await t();done++;onStep(done,tasks.length)}}))}
+/* Calcule ce qu'il faut envoyer, récupérer ou supprimer. */
+function planSync(files){
+  var rdoc={},rtomb={},plan={up:[],down:[],delLocal:[],delRemote:[],mkTomb:[],conflicts:[]};
+  files.forEach(function(f){
+    var m=/^([wf])_(.+)\.json$/.exec(f.name),x=/^x_([wf])_(.+)$/.exec(f.name),u=Number(f.appProperties&&f.appProperties.upd)||0;
+    if(m)rdoc[m[1]+':'+m[2]]={file:f,upd:u};else if(x)rtomb[x[1]+':'+x[2]]={file:f,upd:u}});
+  var ldoc={};S.whiskies.forEach(function(o){ldoc['w:'+o.id]=o});S.friends.forEach(function(o){ldoc['f:'+o.id]=o});
+  var lt=tombs(),keys={};
+  [rdoc,rtomb,ldoc,lt].forEach(function(m){Object.keys(m).forEach(function(k){keys[k]=1})});
+  var at=syncInfo().at||0;
+  Object.keys(keys).forEach(function(k){
+    var ld=ldoc[k],rd=rdoc[k],lts=lt[k]||0,rt=rtomb[k],rts=rt?rt.upd:0;
+    var lu=ld?updOf(ld):0,ru=rd?rd.upd:0,tomb=Math.max(lts,rts),best=Math.max(lu,ru);
+    if(tomb&&tomb>=best){ // suppression gagnante
+      if(ld)plan.delLocal.push({key:k,o:ld});
+      if(rd)plan.delRemote.push({key:k,file:rd.file});
+      if(!rt)plan.mkTomb.push({key:k,ts:tomb});
+      if(rt&&!lts)lt[k]=rts;
+      return}
+    if(lu>=ru&&ld){ // la copie locale est la plus récente (ou seule)
+      if(!rd||lu>ru){plan.up.push({key:k,o:ld,file:rd?rd.file:null,upd:lu});if(rd&&ru>at&&lu>at)plan.conflicts.push({key:k,name:ld.name,kept:'local'})}
+    }else if(rd){ // la copie du Drive est la plus récente
+      plan.down.push({key:k,file:rd.file,upd:ru,had:ld});
+      if(ld&&lu>at)plan.conflicts.push({key:k,name:ld.name,kept:'drive'})}
+    if(rt&&best>rts)plan.delRemote.push({key:k,file:rt.file});
+  });
+  lsSet(TOMBKEY,lt);
+  return plan}
+function syncErr(e){
+  var m=String((e&&e.message)||e);
+  if(m==='offline'||/Failed to fetch|NetworkError/i.test(m))return 'Pas de connexion : réessaie quand le téléphone est en ligne.';
+  if(/popup_closed|popup_failed/.test(m))return 'La fenêtre Google a été fermée avant la fin.';
+  if(/access_denied/.test(m))return 'Autorisation refusée.';
+  if(/drive 403/.test(m))return 'Google refuse l’accès : vérifie que « Google Drive API » est activée dans le projet Google Cloud. ('+m+')';
+  if(/drive 401/.test(m)){G.tok='';return 'La connexion Google a expiré : touche de nouveau « Synchroniser ».'}
+  return 'Échec de la synchronisation : '+m}
+async function doSync(){
+  if(G.busy)return;
+  G.busy=true;G.msg='Connexion à Google…';G.report=null;gbox();
+  try{
+    await loadGsi();var tok=await gToken();
+    G.msg='Lecture du Drive…';gbox();
+    var files=await dList(tok),plan=planSync(files);
+    var rep={up:plan.up.length,down:plan.down.length,del:plan.delLocal.length+plan.delRemote.length,conflicts:plan.conflicts,names:{}};
+    var tasks=[];
+    plan.up.forEach(function(p){tasks.push(async function(){
+      var col=p.key[0]==='w'?'whiskies':'friends',id=p.key.slice(2),o=Object.assign({},p.o);if(!o.upd)o.upd=p.upd;
+      await dPut(tok,p.file?p.file.id:null,p.key[0]+'_'+id+'.json',p.upd,JSON.stringify(o))})});
+    plan.down.forEach(function(p){tasks.push(async function(){
+      var o=await dGet(tok,p.file.id),col=p.key[0]==='w'?'whiskies':'friends';
+      if(!o||!o.id)throw new Error('fichier du Drive illisible ('+p.file.name+')');
+      o.upd=p.upd;await putRaw(col,o);var t=tombs();if(t[p.key]){delete t[p.key];lsSet(TOMBKEY,t)}})});
+    plan.delLocal.forEach(function(p){tasks.push(async function(){
+      var col=p.key[0]==='w'?'whiskies':'friends',id=p.key.slice(2);
+      S[col]=S[col].filter(function(x){return x.id!==id});if(!MEMONLY)await idbDel(col,id)})});
+    plan.delRemote.forEach(function(p){tasks.push(function(){return dDel(tok,p.file.id)})});
+    plan.mkTomb.forEach(function(p){tasks.push(async function(){await dPut(tok,null,'x_'+p.key.replace(':','_'),p.ts,'{}')})});
+    await pool(tasks,4,function(d,n){G.msg='Synchronisation… '+d+' / '+n;gbox()});
+    lsSet(SYKEY,{at:Date.now(),by:devName(),n:S.whiskies.length});
+    G.report=rep;G.msg=tasks.length?'Synchronisation terminée.':'Déjà à jour : rien à envoyer ni à récupérer.';
+    render();
+  }catch(e){G.msg=syncErr(e)}
+  G.busy=false;if(S.view==='exchange')gbox()}
+function gbox(){
+  var el=$('#gbox');if(!el)return;var i=syncInfo(),r=G.report,h='';
+  h+='<p class="hint">Sauvegarde et synchronise tes fiches, photos comprises, dans un espace caché de ton Drive, visible seulement par cette appli. Utilise le même compte Google sur le téléphone et sur le PC.</p>';
+  h+='<p class="hint">'+(i.at?'Dernière synchronisation de cet appareil ('+devName()+') : '+fmtDT(i.at)+(syncDirty()?' · <b>modifications pas encore envoyées</b>':''):'Jamais synchronisé sur cet appareil.')+'</p>';
+  h+='<div class="row"><button type="button" class="btn" data-act="sync"'+(G.busy?' disabled':'')+'>'+(G.busy?'Synchronisation…':'Synchroniser')+'</button></div>';
+  if(G.msg)h+='<div class="banner" role="status">'+esc(G.msg)+'</div>';
+  if(r&&!G.busy){
+    var parts=[];if(r.up)parts.push(r.up+' envoyée'+(r.up>1?'s':''));if(r.down)parts.push(r.down+' récupérée'+(r.down>1?'s':''));if(r.del)parts.push(r.del+' suppression'+(r.del>1?'s':''));
+    if(parts.length)h+='<p class="hint">Détail (fiches et amis) : '+parts.join(', ')+'.</p>';
+    if(r.conflicts.length)h+='<div class="banner">Modifiées des deux côtés depuis la dernière synchronisation : '+r.conflicts.map(function(c){return esc(c.name||'ami')+(c.kept==='drive'?' (version du Drive gardée)':' (version de cet appareil gardée)')}).join(', ')+'. La modification la plus récente a été gardée.</div>'}
+  h+='<label class="chk"><input type="checkbox" data-g="auto"'+(lsGet(AUTOKEY,false)?' checked':'')+'> Synchroniser à la première touche après l’ouverture, si des modifications n’ont pas été envoyées ou après plus de 6 h. Une fenêtre Google s’ouvre alors brièvement.</label>';
+  el.innerHTML=h}
+var AUTODONE=false;
+document.addEventListener('pointerdown',function(){
+  if(AUTODONE)return;AUTODONE=true;
+  if(!lsGet(AUTOKEY,false))return;var i=syncInfo();
+  if(i.at&&(syncDirty()||Date.now()-i.at>6*36e5))doSync()},{once:false});
+document.addEventListener('change',function(e){var t=e.target;if(t&&t.dataset&&t.dataset.g==='auto')lsSet(AUTOKEY,!!t.checked)});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act="sync"]');if(b)doSync()});
+
 /* ---------- helpers ---------- */
 function toast(m){var t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){t.hidden=true},3200)}
 function photoSrc(p){return p.id?'/_blob/'+p.id:p.data}
@@ -250,7 +384,7 @@ function summary(){
 function header(){
   var cur=S.view==='friends'?'friends':S.view==='exchange'?'exchange':(S.view==='form'&&!S.draft.exists)?'form':'list';
   var tab=function(k,l){return '<button class="tab" data-act="tab" data-v="'+k+'"'+(cur===k?' aria-current="page"':'')+'>'+l+'</button>'};
-  return '<header class="top"><div class="brand"><h1>Ma cave</h1><p class="sub">'+esc(summary())+'</p></div><nav class="tabs" aria-label="Navigation">'+tab('list','Collection')+tab('form','Ajouter')+tab('friends','Amis')+tab('exchange','Échange')+'</nav></header>';
+  return '<header class="top"><div class="brand"><h1>Ma cave</h1><p class="sub">'+esc(summary())+'</p></div><nav class="tabs" aria-label="Navigation">'+tab('list','Collection')+tab('form','Ajouter')+tab('friends','Amis')+tab('exchange','Échange'+(syncDirty()?'<i class="tabdot" title="Modifications non envoyées sur le Drive"></i>':''))+'</nav></header>';
 }
 function render(){
   var body;
@@ -265,7 +399,7 @@ function render(){
   $('#app').innerHTML=header()+'<main>'+banner+body+'</main>';
   if(S.view==='list'&&S.loaded.w)renderResults();
   if(S.view==='form')initForm();
-  if(S.view==='exchange'){xbox();ibox()}
+  if(S.view==='exchange'){gbox();xbox();ibox()}
 }
 function softRender(){
   if(S.view==='exchange'){var h2=$('.sub');if(h2)h2.textContent=summary();if(!XP.busy&&!(IM&&IM.busy))xbox();return}
@@ -568,6 +702,7 @@ function canvasBlob(c,q){return new Promise(function(res,rej){c.toBlob(function(
 
 function exchangeHTML(){
   return '<h2>Échange</h2>'+
+    '<div class="card sec"><h3>Synchronisation Google Drive</h3><div id="gbox"></div></div>'+
     '<div class="card sec"><h3>Exporter</h3><div id="xbox"></div></div>'+
     '<div class="card sec"><h3>Importer</h3><div id="ibox"></div></div>'+
     '<p class="hint">Ma cave · version '+APP_VERSION+' · tes fiches sont enregistrées sur cet appareil. Exporte-les régulièrement.</p>';
