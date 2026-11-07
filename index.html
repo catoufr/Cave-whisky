@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.3',APP_DATE='7 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.4',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -373,6 +373,26 @@ document.addEventListener('pointerdown',function(){
 document.addEventListener('change',function(e){var t=e.target;if(t&&t.dataset&&t.dataset.g==='auto')lsSet(AUTOKEY,!!t.checked)});
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act="sync"]');if(b)doSync()});
 
+
+var AIT={msg:'',busy:false};
+function aibox(){
+  var el=$('#aibox');if(!el)return;var c=aiCfg();
+  el.innerHTML='<p class="hint">Sur la fiche, le bouton « Remplir la fiche depuis la photo » envoie la photo de l’étiquette à l’IA Google Gemini (version gratuite) pour pré-remplir les champs. Crée une clé gratuite sur aistudio.google.com (Get API key), puis colle-la ici. Elle reste sur cet appareil : à faire sur chaque appareil. Google peut utiliser les photos envoyées en version gratuite : n’envoie que des étiquettes.</p>'+
+    '<label class="fld"><span>Clé d’accès</span><input type="password" id="ai-key" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(c.key||'')+'" placeholder="Colle ta clé ici"></label>'+
+    '<label class="fld"><span>Modèle (à changer seulement si Google le retire)</span><input type="text" id="ai-model" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(c.model||'')+'" placeholder="'+AI_DEFAULT_MODEL+'"></label>'+
+    '<div class="row"><button type="button" class="btn" data-act="aisave"'+(AIT.busy?' disabled':'')+'>Enregistrer et tester</button>'+(c.key?'<button type="button" class="btn ghost" data-act="aiclear">Effacer la clé</button>':'')+'</div>'+
+    (AIT.msg?'<div class="banner" role="status">'+esc(AIT.msg)+'</div>':'')+
+    '<p class="hint">'+(aiKey()?'Clé enregistrée sur cet appareil.':'Pas de clé enregistrée.')+'</p>'}
+document.addEventListener('click',async function(e){
+  var b=e.target.closest&&e.target.closest('[data-act="aisave"],[data-act="aiclear"]');if(!b)return;
+  if(b.dataset.act==='aiclear'){lsSet(AIKEY,{});AIT.msg='Clé effacée de cet appareil.';aibox();return}
+  var k=($('#ai-key').value||'').trim(),m=($('#ai-model').value||'').trim();
+  if(!k){AIT.msg='Colle d’abord ta clé.';aibox();return}
+  lsSet(AIKEY,{key:k,model:m});AIT.busy=true;AIT.msg='Test en cours…';aibox();
+  try{var t=await geminiCall([{text:'Réponds par le JSON {"ok":true}.'}]);AIT.msg='Clé acceptée : la lecture d’étiquette est prête.'}
+  catch(er){AIT.msg=(aiErrText(er)||'Test interrompu.')+' (La clé est quand même enregistrée.)'}
+  AIT.busy=false;aibox()});
+
 /* ---------- helpers ---------- */
 function toast(m){var t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){t.hidden=true},3200)}
 function photoSrc(p){return p.id?'/_blob/'+p.id:p.data}
@@ -405,7 +425,7 @@ function render(){
   $('#app').innerHTML=header()+'<main>'+banner+body+'</main>';
   if(S.view==='list'&&S.loaded.w)renderResults();
   if(S.view==='form')initForm();
-  if(S.view==='exchange'){gbox();xbox();ibox()}
+  if(S.view==='exchange'){gbox();aibox();xbox();ibox()}
 }
 function softRender(){
   if(S.view==='exchange'){var h2=$('.sub');if(h2)h2.textContent=summary();if(!XP.busy&&!(IM&&IM.busy))xbox();return}
@@ -562,7 +582,7 @@ function photosBox(){
   el.innerHTML=(d.photos.length?'<div class="photo-grid">'+d.photos.map(function(p,i){return '<div class="ph"><img src="'+esc(photoSrc(p))+'" alt="Étiquette '+(i+1)+'"><button type="button" class="ph-x" data-act="rmphoto" data-i="'+i+'" aria-label="Retirer la photo '+(i+1)+'">×</button></div>'}).join('')+'</div>':'')+
     (d.photos.length<2?'<div class="row"><label class="btn filebtn">Prendre une photo<input type="file" accept="image/*" capture="environment" data-photo="1" aria-label="Prendre une photo"></label><label class="btn ghost filebtn">Choisir une image<input type="file" accept="image/*" data-photo="1" aria-label="Choisir une image dans les fichiers"></label></div>':'<p class="hint">2 photos maximum.</p>')+
     (S.uploading?'<p class="hint">Envoi de la photo…</p>':'')+
-    (CAN_IMG&&d.photos.length?'<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="read"'+(S.reading?' disabled':'')+'>'+(S.reading?'Lecture de l’étiquette…':'Remplir la fiche depuis la photo')+'</button>'+(S.reading?'<button type="button" class="btn ghost small" data-act="readstop">Arrêter</button>':'')+'</div><p class="hint" style="margin-top:6px">Claude lit l’étiquette et remplit les champs vides. Champs surlignés : remplis par Claude. En pointillés : déduits de ce que Claude connaît du produit, à vérifier. Rien n’est enregistré avant ton clic sur Enregistrer.</p>':'');
+    (d.photos.length?'<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="read"'+(S.reading?' disabled':'')+'>'+(S.reading?'Lecture de l’étiquette…':'Remplir la fiche depuis la photo')+'</button>'+(S.reading?'<button type="button" class="btn ghost small" data-act="readstop">Arrêter</button>':'')+'</div><p class="hint" style="margin-top:6px">L’IA lit l’étiquette et remplit les champs vides. Champs surlignés : lus sur l’étiquette. En pointillés : déduits de ce que l’IA connaît du produit, à vérifier. Rien n’est enregistré avant ton clic sur Enregistrer.'+(aiKey()?'':' <b>Il faut d’abord ajouter ta clé dans l’onglet Échange.</b>')+'</p>':'');
 }
 function refreshFriendsBox(){
   var d=S.draft,el=$('#friendsbox');if(!el||!d)return;
@@ -615,14 +635,34 @@ Règles :
 - N'invente rien : une valeur illisible ou incertaine vaut null. Ne donne aucun prix.
 - inferred : les clés que tu déduis de ta connaissance du produit et que tu n'as pas lues sur l'étiquette (ex. ["distillery","country"]).
 - unreadable : true si les photos ne permettent pas d'identifier le whisky.`;
+/* clé et modèle : gardés sur cet appareil seulement (jamais envoyés sur le Drive ni sur GitHub) */
+var AIKEY='cave-ai-v1',AI_DEFAULT_MODEL='gemini-flash-latest';
+function aiCfg(){return lsGet(AIKEY,{})}
+function aiKey(){return (aiCfg().key||'').trim()}
+function aiModel(){return (aiCfg().model||'').trim()||AI_DEFAULT_MODEL}
+function blobB64(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result).split(',')[1])};r.onerror=function(){rej(new Error('lecture impossible'))};r.readAsDataURL(b)})}
+async function geminiCall(parts,signal){
+  var r;
+  try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(aiModel())+':generateContent',{method:'POST',signal:signal,
+    headers:{'Content-Type':'application/json','x-goog-api-key':aiKey()},
+    body:JSON.stringify({contents:[{role:'user',parts:parts}],generationConfig:{temperature:.1,responseMimeType:'application/json'}})})}
+  catch(e){if(e&&e.name==='AbortError'){var c=new Error('cancelled');c.code='cancelled';throw c}var n=new Error('réseau');n.code='network';throw n}
+  if(!r.ok){var t='';try{t=await r.text()}catch(e){}var er=new Error('http '+r.status+' '+t.slice(0,200));er.code='http'+r.status;er.detail=t;throw er}
+  var j=await r.json(),c0=j.candidates&&j.candidates[0],txt=c0&&c0.content&&c0.content.parts&&c0.content.parts.map(function(x){return x.text||''}).join('');
+  if(!txt){var e2=new Error('vide');e2.code='empty';throw e2}
+  return txt}
+function parseJsonLoose(t){t=String(t).trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();try{return JSON.parse(t)}catch(e){var m=/\{[\s\S]*\}/.exec(t);if(m)return JSON.parse(m[0]);throw e}}
 async function readLabel(){
-  var d=S.draft;if(!d||!SAMPLE||S.reading||!d.photos.length)return;
+  var d=S.draft;if(!d||S.reading||!d.photos.length)return;
+  if(!aiKey()){toast('Ajoute d’abord ta clé dans l’onglet Échange.');return}
   S.reading=true;photosBox();
   readCtl=new AbortController();
   try{
-    var blobs=[];
-    for(var i=0;i<d.photos.length;i++){var p=d.photos[i],b=BLOBS.get(p);if(!b){var r=await fetch(photoSrc(p));b=await r.blob()}blobs.push(b)}
-    var j=await SAMPLE.json(LABEL_PROMPT,{images:blobs,modelTier:'default',signal:readCtl.signal});
+    var parts=[{text:LABEL_PROMPT}];
+    for(var i=0;i<d.photos.length;i++){var p=d.photos[i],b=BLOBS.get(p);if(!b){var r=await fetch(photoSrc(p));b=await r.blob()}
+      parts.push({inline_data:{mime_type:b.type||'image/jpeg',data:await blobB64(b)}})}
+    var txt=await geminiCall(parts,readCtl.signal),j;
+    try{j=parseJsonLoose(txt)}catch(e){var pe=new Error('json');pe.code='invalid_json';throw pe}
     applyLabel(j);
   }catch(e){labelError(e)}
   S.reading=false;readCtl=null;photosBox();
@@ -642,15 +682,19 @@ function applyLabel(j){
   if(Array.isArray(j.profile)){var added=false;j.profile.slice(0,4).forEach(function(t){t=String(t||'').trim();if(t&&!S.draft.tags.includes(t)){S.draft.tags.push(t);added=true;n++}});if(added)tagsBox()}
   toast(n?'Fiche remplie ('+n+' champ'+(n>1?'s':'')+'). Vérifie avant d’enregistrer.':'Rien de plus à remplir depuis cette photo.');
 }
-function labelError(e){
-  var c=e&&e.code;
-  if(c==='cancelled')return;
-  if(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed','images_unavailable'].indexOf(c)>=0){CAN_IMG=false;toast('Lecture automatique indisponible ici.');return}
-  if(c==='rate_limited')toast('Trop de demandes : réessaie un peu plus tard.');
-  else if(c==='image_rejected')toast('Image refusée. Essaie une autre photo.');
-  else if(c==='invalid_json'||c==='empty_completion'||c==='refused')toast('Étiquette non lue. Reprends la photo de plus près.');
-  else toast('Lecture interrompue. Réessaie.');
+function aiErrText(e){
+  var c=e&&e.code,d=(e&&e.detail)||'';
+  if(c==='cancelled')return '';
+  if(c==='network')return 'Pas de connexion : réessaie quand le téléphone est en ligne.';
+  if(c==='http400'&&/API key|API_KEY/i.test(d))return 'Clé refusée : vérifie que tu l’as collée en entier.';
+  if(c==='http401'||c==='http403')return 'Clé refusée ou accès non autorisé : vérifie la clé dans l’onglet Échange.';
+  if(c==='http404')return 'Modèle introuvable : change son nom dans l’onglet Échange (ou remets « '+AI_DEFAULT_MODEL+' »).';
+  if(c==='http429')return 'Quota gratuit atteint : réessaie plus tard (la remise à zéro se fait chaque jour).';
+  if(c==='invalid_json'||c==='empty')return 'Étiquette non lue. Reprends la photo de plus près.';
+  if(c==='http400')return 'Demande refusée par le service (image trop lourde ou modèle sans lecture d’image ?).';
+  return 'Lecture interrompue. Réessaie.';
 }
+function labelError(e){var m=aiErrText(e);if(m)toast(m)}
 
 /* photos */
 function shrink(file,max,q){return new Promise(function(res,rej){
@@ -710,6 +754,7 @@ function exchangeHTML(){
   return '<h2>Échange</h2>'+
     '<p class="verline"><b>Version '+APP_VERSION+'</b> · '+APP_DATE+'</p>'+
     '<div class="card sec"><h3>Synchronisation Google Drive</h3><div id="gbox"></div></div>'+
+    '<div class="card sec"><h3>Lecture d’étiquette par IA</h3><div id="aibox"></div></div>'+
     '<div class="card sec"><h3>Exporter</h3><div id="xbox"></div></div>'+
     '<div class="card sec"><h3>Importer</h3><div id="ibox"></div></div>'+
     '<p class="hint">Ma cave · tes fiches sont enregistrées sur cet appareil. Exporte-les régulièrement.</p>';
