@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.4.1',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.4',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -642,13 +642,11 @@ function aiKey(){return (aiCfg().key||'').trim()}
 function aiModel(){return (aiCfg().model||'').trim()||AI_DEFAULT_MODEL}
 function blobB64(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result).split(',')[1])};r.onerror=function(){rej(new Error('lecture impossible'))};r.readAsDataURL(b)})}
 async function geminiCall(parts,signal){
-  var r,ctl=new AbortController(),timedOut=false,tm=setTimeout(function(){timedOut=true;ctl.abort()},45000);
-  if(signal)signal.addEventListener('abort',function(){ctl.abort()});
-  try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(aiModel())+':generateContent',{method:'POST',signal:ctl.signal,
+  var r;
+  try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(aiModel())+':generateContent',{method:'POST',signal:signal,
     headers:{'Content-Type':'application/json','x-goog-api-key':aiKey()},
     body:JSON.stringify({contents:[{role:'user',parts:parts}],generationConfig:{temperature:.1,responseMimeType:'application/json'}})})}
-  catch(e){clearTimeout(tm);if(timedOut){var to=new Error('timeout');to.code='timeout';throw to}if(e&&e.name==='AbortError'){var c=new Error('cancelled');c.code='cancelled';throw c}var n=new Error('réseau');n.code='network';throw n}
-  clearTimeout(tm);
+  catch(e){if(e&&e.name==='AbortError'){var c=new Error('cancelled');c.code='cancelled';throw c}var n=new Error('réseau');n.code='network';throw n}
   if(!r.ok){var t='';try{t=await r.text()}catch(e){}var er=new Error('http '+r.status+' '+t.slice(0,200));er.code='http'+r.status;er.detail=t;throw er}
   var j=await r.json(),c0=j.candidates&&j.candidates[0],txt=c0&&c0.content&&c0.content.parts&&c0.content.parts.map(function(x){return x.text||''}).join('');
   if(!txt){var e2=new Error('vide');e2.code='empty';throw e2}
@@ -687,7 +685,6 @@ function applyLabel(j){
 function aiErrText(e){
   var c=e&&e.code,d=(e&&e.detail)||'';
   if(c==='cancelled')return '';
-  if(c==='timeout')return 'Le service Google ne répond pas (plus de 45 secondes). Réessaie dans un moment, ou essaie un autre nom de modèle.';
   if(c==='network')return 'Pas de connexion : réessaie quand le téléphone est en ligne.';
   if(c==='http400'&&/API key|API_KEY/i.test(d))return 'Clé refusée : vérifie que tu l’as collée en entier.';
   if(c==='http401'||c==='http403')return 'Clé refusée ou accès non autorisé : vérifie la clé dans l’onglet Échange.';
