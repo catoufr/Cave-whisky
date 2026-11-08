@@ -3,6 +3,7 @@
   "short_name": "Ma cave",
   "description": "Ma collection de whisky : fiches, photos, notes de dégustation.",
   "lang": "fr",
+  "id": "/Cave-whisky/?app=cave",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

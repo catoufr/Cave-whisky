@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.4',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.4.2',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
