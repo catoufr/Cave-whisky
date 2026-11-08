@@ -141,10 +141,9 @@ form{display:flex;flex-direction:column;gap:16px}
 .rate-top{display:flex;align-items:center;gap:10px}
 .rate-top label{flex:1;font-weight:500}
 .rate-top output{font-family:var(--f-mono);font-size:1.1rem;min-width:2ch;text-align:right}
-.rate input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
-.rate.unset input[type=range]{opacity:.45}
-.rate.unset .x{visibility:hidden}
-.ends{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.rsel{width:5.5rem;min-height:44px;font-family:var(--f-mono);font-size:1.05rem;text-align:center;text-align-last:center}
+.rate.unset .rsel{color:var(--muted)}
+.ends{font-size:.75rem;font-weight:400;color:var(--muted)}
 .linkrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
 .linkrow input:nth-child(2){grid-column:1 / -1;order:3}
 .err{color:var(--danger);font-size:.85rem;margin:0}
@@ -204,7 +203,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.5',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.6',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -609,7 +608,7 @@ function formHTML(){
     '</div>'+
     '<div class="card sec"><h3>Profil annoncé</h3><div id="tagsbox"></div></div>'+
     '<div class="card sec"><h3>Photos de l’étiquette</h3><div id="photos"></div></div>'+
-    '<div class="card sec"><h3>Ma dégustation (facultative)</h3><p class="hint" style="margin-bottom:6px">Déplace le curseur pour noter de 0 à 10. Le × efface une note.</p>'+CRITERIA.map(function(c){return rateRow(c,d.ratings[c.k])}).join('')+'</div>'+
+    '<div class="card sec"><h3>Ma dégustation (facultative)</h3><p class="hint" style="margin-bottom:6px">Choisis une note de 0 à 10 dans la liste. « – » = non renseigné.</p>'+CRITERIA.map(function(c){return rateRow(c,d.ratings[c.k])}).join('')+'</div>'+
     '<div class="card sec"><h3>Remarques</h3><textarea id="f-notes" placeholder="Annotations libres">'+esc(w.notes||'')+'</textarea></div>'+
     '<div class="card sec"><h3>Apprécié par</h3><div id="friendsbox"></div></div>'+
     '<div class="card sec"><h3>Avis d’experts (2 ou 3 liens)</h3><div id="linksbox"></div></div>'+
@@ -618,9 +617,10 @@ function formHTML(){
   '</form>';
 }
 function rateRow(c,val){
-  var set=val!=null;
-  return '<div class="rate'+(set?'':' unset')+'" data-k="'+c.k+'"><div class="rate-top"><label for="r-'+c.k+'">'+c.label+'</label><output id="o-'+c.k+'">'+(set?val:'—')+'</output><button type="button" class="x" data-act="clear" data-k="'+c.k+'" aria-label="Effacer la note '+esc(c.label)+'">×</button></div>'+
-    '<input type="range" id="r-'+c.k+'" min="0" max="10" step="1" value="'+(set?val:5)+'" data-k="'+c.k+'">'+(c.k==='sweet'?'<div class="ends"><span>0 sec</span><span>10 sucré</span></div>':'')+'</div>';
+  var set=val!=null,o='<option value=""'+(set?'':' selected')+'>–</option>';
+  for(var i=0;i<=10;i++)o+='<option value="'+i+'"'+(set&&val===i?' selected':'')+'>'+i+'</option>';
+  return '<div class="rate'+(set?'':' unset')+'" data-k="'+c.k+'"><div class="rate-top"><label for="r-'+c.k+'">'+c.label+(c.k==='sweet'?'<span class="ends"> · 0 sec, 10 sucré</span>':'')+'</label>'+
+    '<select id="r-'+c.k+'" class="rsel" data-k="'+c.k+'" data-rate="1" aria-label="Note '+esc(c.label)+'">'+o+'</select></div></div>';
 }
 function initForm(){tagsBox();photosBox();refreshFriendsBox();linksBox()}
 function tagsBox(){
@@ -1066,8 +1066,7 @@ document.addEventListener('click',async function(e){
     case 'friend':{var id=b.dataset.id,j=d.friends.indexOf(id);if(j>=0)d.friends.splice(j,1);else d.friends.push(id);b.setAttribute('aria-pressed',j<0);break}
     case 'addfriend-form':{var inp=$('#f-newfriend');if(await addFriend(inp.value)){refreshFriendsBox();var nf=S.friends.find(function(f){return f.name.toLowerCase()===inp.value.trim().toLowerCase()});if(nf&&S.draft&&!S.draft.friends.includes(nf.id))S.draft.friends.push(nf.id);refreshFriendsBox()}break}
     case 'rmphoto':d.photos.splice(Number(b.dataset.i),1);photosBox();break;
-    case 'clear':{var k=b.dataset.k;delete d.ratings[k];var row=document.querySelector('.rate[data-k="'+k+'"]');row.classList.add('unset');$('#o-'+k).textContent='—';$('#r-'+k).value=5;break}
-    case 'addlink':d.links=readLinks();d.links.push({label:'',url:'',note:''});linksBox();break;
+        case 'addlink':d.links=readLinks();d.links.push({label:'',url:'',note:''});linksBox();break;
     case 'paste':pasteImport();break;
     case 'read':readLabel();break;
     case 'readstop':if(readCtl)readCtl.abort();break;
@@ -1083,11 +1082,12 @@ document.addEventListener('click',async function(e){
   }
 });
 function rateSet(el){
-  if(!el.matches||!el.matches('.rate input[type=range]'))return;
-  var k=el.dataset.k,v=Number(el.value);S.draft.ratings[k]=v;
-  document.querySelector('.rate[data-k="'+k+'"]').classList.remove('unset');$('#o-'+k).textContent=v;
+  if(!el.matches||!el.matches('select[data-rate]'))return;
+  var k=el.dataset.k,row=document.querySelector('.rate[data-k="'+k+'"]');
+  if(el.value===''){delete S.draft.ratings[k];row.classList.add('unset')}
+  else{S.draft.ratings[k]=Number(el.value);row.classList.remove('unset')}
 }
-['input','change','pointerup'].forEach(function(ev){document.addEventListener(ev,function(e){rateSet(e.target)})});
+document.addEventListener('change',function(e){rateSet(e.target)});
 document.addEventListener('input',function(e){
   var t=e.target;
   if(t.dataset&&t.dataset.f){var k=t.dataset.f;S.filters[k]=t.type==='checkbox'?t.checked:t.value;renderResults()}

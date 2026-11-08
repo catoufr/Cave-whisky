@@ -1,6 +1,6 @@
 /* Service worker de Ma cave : l'appli fonctionne hors connexion.
    Changer VERSION à chaque mise à jour des fichiers pour renouveler le cache. */
-const VERSION = 'cave-v0.5';
+const VERSION = 'cave-v0.6';
 const FILES = ['./', './index.html', './manifest.webmanifest', './vendor/jszip.min.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
