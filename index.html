@@ -141,7 +141,8 @@ form{display:flex;flex-direction:column;gap:16px}
 .rate-top{display:flex;align-items:center;gap:10px}
 .rate-top label{flex:1;font-weight:500}
 .rate-top output{font-family:var(--f-mono);font-size:1.1rem;min-width:2ch;text-align:right}
-.rsel{width:5.5rem;min-height:44px;font-family:var(--f-mono);font-size:1.05rem;text-align:center;text-align-last:center}
+.rate-top{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:10px}
+.rsel{width:100%;min-height:33px;height:33px;padding:0 8px;font-family:var(--f-mono);font-size:.95rem;text-align:center;text-align-last:center}
 .rate.unset .rsel{color:var(--muted)}
 .ends{font-size:.75rem;font-weight:400;color:var(--muted)}
 .linkrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
@@ -203,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.7',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.8',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
