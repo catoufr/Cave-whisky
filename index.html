@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.8',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.9',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -597,7 +597,7 @@ function formHTML(){
   '<form id="wform" autocomplete="off">'+
     '<div class="card" style="display:flex;flex-direction:column;gap:12px">'+
       inp('name','Nom',w.name||'','placeholder="ex. Nikka Coffey Malt" required')+
-      '<details><summary>Coller une fiche préparée avec Claude</summary><p class="hint" style="margin-top:8px">Demande à Claude la fiche d’un whisky « au format import », colle le texte ici, puis vérifie les champs remplis.</p>'+
+      '<details><summary>Coller la réponse de Claude ou Gemini</summary><p class="hint" style="margin-top:8px">Colle ici le bloc copié depuis Claude ou Gemini, puis touche « Remplir la fiche ». Les champs remplis sont surlignés : vérifie-les avant d’enregistrer.</p>'+
       '<textarea id="f-paste" placeholder="Colle le JSON ici" aria-label="Fiche à coller"></textarea>'+
       '<div class="row" style="margin-top:8px"><button type="button" class="btn ghost small" data-act="paste">Remplir la fiche</button></div>'+
       '<pre>{"name":"…","distillery":"…","country":"…","type":"…","age":null,"abv":45,"volume":70,"price":null,"profile":["Fruité"],"links":[{"label":"Site","url":"https://…","note":""}]}</pre></details>'+
@@ -634,7 +634,11 @@ function photosBox(){
   el.innerHTML=(d.photos.length?'<div class="photo-grid">'+d.photos.map(function(p,i){return '<div class="ph"><img src="'+esc(photoSrc(p))+'" alt="Étiquette '+(i+1)+'"><button type="button" class="ph-x" data-act="rmphoto" data-i="'+i+'" aria-label="Retirer la photo '+(i+1)+'">×</button></div>'}).join('')+'</div>':'')+
     (d.photos.length<2?'<div class="row"><label class="btn filebtn">Prendre une photo<input type="file" accept="image/*" capture="environment" data-photo="1" aria-label="Prendre une photo"></label><label class="btn ghost filebtn">Choisir une image<input type="file" accept="image/*" data-photo="1" aria-label="Choisir une image dans les fichiers"></label></div>':'<p class="hint">2 photos maximum.</p>')+
     (S.uploading?'<p class="hint">Envoi de la photo…</p>':'')+
-    (d.photos.length?'<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="read"'+(S.reading?' disabled':'')+'>'+(S.reading?'Lecture de l’étiquette…':'Remplir la fiche depuis la photo')+'</button>'+(S.reading?'<button type="button" class="btn ghost small" data-act="readstop">Arrêter</button>':'')+'</div><p class="hint" style="margin-top:6px">L’IA lit l’étiquette et remplit les champs vides. Champs surlignés : lus sur l’étiquette. En pointillés : déduits de ce que l’IA connaît du produit, à vérifier. Rien n’est enregistré avant ton clic sur Enregistrer.'+(aiKey()?'':' <b>Il faut d’abord ajouter ta clé dans l’onglet Échange.</b>')+'</p>':'');
+    (d.photos.length?'<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="chat">Analyser avec Claude ou Gemini</button></div>'+
+      '<p class="hint" style="margin-top:6px"><b>1.</b> Touche ce bouton : la consigne est copiée et la photo part vers l’appli que tu choisis (Claude ou Gemini). <b>2.</b> Dans l’appli, colle la consigne si elle n’apparaît pas, et envoie. <b>3.</b> Touche le bouton « copier » sous la réponse, reviens ici et touche « Coller la réponse ».</p>'+
+      '<div class="row"><button type="button" class="btn ghost small" data-act="copyprompt">Copier la consigne</button><a class="btn ghost small" href="https://claude.ai/new" target="_blank" rel="noopener">Ouvrir Claude</a><a class="btn ghost small" href="https://gemini.google.com/app" target="_blank" rel="noopener">Ouvrir Gemini</a></div>'+
+      '<div class="row" style="margin-top:8px"><button type="button" class="btn" data-act="pasteclip">Coller la réponse</button></div>'+
+      (aiKey()?'<div class="row" style="margin-top:8px"><button type="button" class="btn ghost small" data-act="read"'+(S.reading?' disabled':'')+'>'+(S.reading?'Lecture de l’étiquette…':'Lecture rapide avec ma clé Gemini')+'</button>'+(S.reading?'<button type="button" class="btn ghost small" data-act="readstop">Arrêter</button>':'')+'</div>':''):'');
 }
 function refreshFriendsBox(){
   var d=S.draft,el=$('#friendsbox');if(!el||!d)return;
@@ -663,14 +667,60 @@ async function saveForm(){
   try{await put('whiskies',obj);toast('Fiche enregistrée.');go('detail',obj.id)}
   catch(e){S.formError='Enregistrement impossible ('+((e&&e.code)||'erreur')+'). Réessaie dans un instant.';var fe=$('#ferr');if(fe)fe.textContent=S.formError}
 }
+/* Analyse par Claude ou Gemini (dans leur appli) : consigne + photo, puis on colle la réponse */
+var CHAT_PROMPT=`Tu es mon assistant pour ma collection de whisky. Je joins la photo de l'étiquette d'une bouteille (parfois deux : face avant et contre-étiquette).
+Fais ceci :
+1. Lis l'étiquette et identifie le whisky exact.
+2. Cherche-le sur whiskybase.com (recherche web) et, si tu peux, sur un ou deux autres sites d'experts. Récupère les informations de la fiche du produit.
+3. Réponds par UN SEUL bloc de code JSON (pour que j'aie un bouton « copier »), sans aucun texte avant ni après, de cette forme exacte :
+{"name":"","distillery":"","country":"","type":"","age":null,"abv":null,"volume":null,"price":null,"profile":[],"links":[{"label":"Whiskybase","url":"","note":""}]}
+Règles :
+- name : nom complet tel qu'écrit sur la bouteille, sans le volume ni le degré.
+- distillery : la distillerie. country : pays avec la région ou l'île (ex. "Écosse, Islay"). type : Single malt, Blended scotch, Blended malt, Bourbon, Whisky japonais, etc.
+- age : nombre d'années s'il est inscrit sur l'étiquette, sinon null. abv : degré en %. volume : en cl (0,7 L = 70).
+- price : prix moyen indicatif en euros (un nombre) si tu en trouves un fiable, sinon null.
+- profile : 3 à 6 mots en français qui décrivent le style (Tourbé, Fumé, Maritime, Fruité, Vanillé, Épicé, Boisé, Sherry, Floral, etc.).
+- links : 1 à 3 pages RÉELLES que tu as trouvées (jamais d'adresse inventée), la première sur Whiskybase si possible. label = nom du site ; note = la note de l'expert avec son échelle (ex. "87,3/100 sur 1250 votes"), vide s'il n'y en a pas.
+- Valeur inconnue : null (ou []). N'invente rien.
+- Si tu ne peux pas faire de recherche sur internet, remplis ce que tu sais de l'étiquette et mets "links":[].`;
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true}catch(e){}
+  try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();var ok=document.execCommand('copy');ta.remove();return ok}catch(e){return false}
+}
+function chatPrompt(){var n=($('#f-name')||{}).value;n=(n||'').trim();return CHAT_PROMPT+(n?'\nNom que j\'ai saisi (à vérifier) : '+n:'')}
+async function photoFiles(){
+  var out=[];
+  for(var i=0;i<S.draft.photos.length;i++){var p=S.draft.photos[i],b=BLOBS.get(p);if(!b){var r=await fetch(photoSrc(p));b=await r.blob()}out.push(new File([b],'etiquette-'+(i+1)+'.jpg',{type:b.type||'image/jpeg'}))}
+  return out}
+async function chatAnalyse(){
+  var txt=chatPrompt(),copied=await copyText(txt),files=[];
+  try{files=await photoFiles()}catch(e){}
+  try{
+    if(files.length&&navigator.canShare&&navigator.canShare({files:files})){
+      await navigator.share({files:files,text:txt,title:'Étiquette de whisky'});
+      toast(copied?'Consigne copiée. Colle-la dans l’appli si elle n’apparaît pas.':'Choisis Claude ou Gemini, puis colle la consigne (bouton « Copier la consigne »).');return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  toast(copied?'Consigne copiée. Ouvre Claude ou Gemini, joins la photo et colle la consigne.':'Partage impossible ici : touche « Copier la consigne », puis ouvre Claude ou Gemini.');
+}
+async function pasteClip(){
+  var t='';
+  try{t=await navigator.clipboard.readText()}catch(e){}
+  var ta=$('#f-paste');
+  if(ta&&t&&t.trim()){ta.value=t;pasteImport();return}
+  var det=ta&&ta.closest('details');if(det)det.open=true;
+  if(ta){ta.focus();ta.scrollIntoView({block:'center'})}
+  toast('Colle la réponse dans la zone, puis touche « Remplir la fiche ».');
+}
 function pasteImport(){
-  var raw=$('#f-paste').value.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-  var j;try{j=JSON.parse(raw)}catch(e){toast('Texte illisible : colle le JSON complet.');return}
-  var set=function(id,val){var el=$('#f-'+id);if(el&&val!=null&&val!=='')el.value=val};
+  var raw=$('#f-paste').value.trim();
+  var m=/\{[\s\S]*\}/.exec(raw);if(m)raw=m[0];
+  var j;try{j=JSON.parse(raw)}catch(e){toast('Réponse illisible : copie le bloc complet (de { à }).');return}
+  var n=0,set=function(id,val){var el=$('#f-'+id);if(el&&val!=null&&val!==''){el.value=val;el.classList.add('auto');n++}};
   set('name',j.name);set('distillery',j.distillery);set('country',j.country);set('type',j.type);set('age',j.age);set('abv',j.abv);set('volume',j.volume);set('price',j.price);
-  if(Array.isArray(j.profile)){j.profile.forEach(function(t){if(t&&!S.draft.tags.includes(t))S.draft.tags.push(String(t))});tagsBox()}
-  if(Array.isArray(j.links)){S.draft.links=j.links.slice(0,3).map(function(l){return {label:String(l.label||''),url:String(l.url||''),note:String(l.note||'')}});linksBox()}
-  toast('Fiche pré-remplie. Vérifie puis enregistre.');
+  if(Array.isArray(j.profile)){j.profile.forEach(function(t){if(t&&!S.draft.tags.includes(String(t))){S.draft.tags.push(String(t));n++}});tagsBox()}
+  if(Array.isArray(j.links)){var ls=j.links.filter(function(l){return l&&/^https?:\/\//i.test(String(l.url||''))}).slice(0,3).map(function(l){return {label:String(l.label||''),url:String(l.url||''),note:String(l.note||'')}});if(ls.length){S.draft.links=ls;linksBox();n+=ls.length}}
+  var det=$('#f-paste').closest('details');if(det)det.open=false;
+  toast(n?'Fiche pré-remplie ('+n+' éléments). Vérifie puis enregistre.':'Rien à remplir dans cette réponse.');
 }
 
 /* lecture de l’étiquette */
@@ -1084,6 +1134,9 @@ document.addEventListener('click',async function(e){
         case 'addlink':d.links=readLinks();d.links.push({label:'',url:'',note:''});linksBox();break;
     case 'paste':pasteImport();break;
     case 'read':readLabel();break;
+    case 'chat':chatAnalyse();break;
+    case 'copyprompt':{var ok=await copyText(chatPrompt());toast(ok?'Consigne copiée.':'Copie impossible : sélectionne le texte à la main.');break}
+    case 'pasteclip':pasteClip();break;
     case 'readstop':if(readCtl)readCtl.abort();break;
     case 'export':runExport();break;
     case 'xall':S.whiskies.forEach(function(w){XP.pick[w.id]=true});xbox();break;
