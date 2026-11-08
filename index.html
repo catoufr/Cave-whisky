@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.4.2',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.5',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -286,11 +286,46 @@ async function putRaw(col,obj){upsert(col,obj);if(!MEMONLY)await idbPut(col,obj)
 async function pool(tasks,n,onStep){var i=0,done=0;
   await Promise.all(Array.from({length:Math.min(n,tasks.length)},async function(){while(i<tasks.length){var t=tasks[i++];await t();done++;onStep(done,tasks.length)}}))}
 /* Calcule ce qu'il faut envoyer, récupérer ou supprimer. */
-function planSync(files){
-  var rdoc={},rtomb={},plan={up:[],down:[],delLocal:[],delRemote:[],mkTomb:[],conflicts:[]};
+function parseFiles(files){
+  var rdoc={},rtomb={};
   files.forEach(function(f){
     var m=/^([wf])_(.+)\.json$/.exec(f.name),x=/^x_([wf])_(.+)$/.exec(f.name),u=Number(f.appProperties&&f.appProperties.upd)||0;
     if(m)rdoc[m[1]+':'+m[2]]={file:f,upd:u};else if(x)rtomb[x[1]+':'+x[2]]={file:f,upd:u}});
+  return {rdoc:rdoc,rtomb:rtomb}}
+function localDocs(){var l={};S.whiskies.forEach(function(o){l['w:'+o.id]=o});S.friends.forEach(function(o){l['f:'+o.id]=o});return l}
+/* Forcer un sens : 'send' = le Drive devient identique à cet appareil ; 'recv' = cet appareil devient identique au Drive */
+function planForce(files,mode){
+  var P=parseFiles(files),rdoc=P.rdoc,rtomb=P.rtomb,ldoc=localDocs(),now=Date.now(),plan={up:[],down:[],delLocal:[],delRemote:[],mkTomb:[],conflicts:[]};
+  if(mode==='send'){
+    Object.keys(ldoc).forEach(function(k){plan.up.push({key:k,o:ldoc[k],file:rdoc[k]?rdoc[k].file:null,upd:now});if(rtomb[k])plan.delRemote.push({key:k,file:rtomb[k].file})});
+    Object.keys(rdoc).forEach(function(k){if(!ldoc[k]){plan.delRemote.push({key:k,file:rdoc[k].file});if(!rtomb[k])plan.mkTomb.push({key:k,ts:now})}});
+    var lt=tombs();Object.keys(lt).forEach(function(k){if(!ldoc[k]&&!rtomb[k]&&!plan.mkTomb.some(function(x){return x.key===k}))plan.mkTomb.push({key:k,ts:lt[k]})});
+  }else{
+    var eff={};Object.keys(rdoc).forEach(function(k){if(!(rtomb[k]&&rtomb[k].upd>=rdoc[k].upd))eff[k]=rdoc[k]});
+    Object.keys(eff).forEach(function(k){plan.down.push({key:k,file:eff[k].file,upd:eff[k].upd,had:ldoc[k]})});
+    Object.keys(ldoc).forEach(function(k){if(!eff[k])plan.delLocal.push({key:k,o:ldoc[k]})});
+    var nt={};Object.keys(rtomb).forEach(function(k){nt[k]=rtomb[k].upd});lsSet(TOMBKEY,nt);
+  }
+  return plan}
+/* copie de sécurité de cet appareil, gardée avant tout remplacement (une seule : la dernière) */
+function bkOpen(){return new Promise(function(res,rej){var r=indexedDB.open('cave-backup',1);r.onupgradeneeded=function(){r.result.createObjectStore('b',{keyPath:'k'})};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+async function bkSave(o){var d=await bkOpen();return new Promise(function(res,rej){var t=d.transaction('b','readwrite');t.objectStore('b').put(o);t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)}})}
+async function bkLoad(){try{var d=await bkOpen();return await new Promise(function(res,rej){var q=d.transaction('b').objectStore('b').get('last');q.onsuccess=function(){res(q.result||null)};q.onerror=function(){rej(q.error)}})}catch(e){return null}}
+async function safetyCopy(plan,mode){
+  var ws=[],fs=[];
+  plan.down.forEach(function(p){if(p.had)(p.key[0]==='w'?ws:fs).push(p.had)});
+  plan.delLocal.forEach(function(p){(p.key[0]==='w'?ws:fs).push(p.o)});
+  if(!ws.length&&!fs.length)return;
+  var o={k:'last',at:Date.now(),reason:mode==='recv'?'avant « Récupérer depuis le Drive »':'avant remplacement par le Drive',whiskies:JSON.parse(JSON.stringify(ws)),friends:JSON.parse(JSON.stringify(fs))};
+  await bkSave(o);G.bk=o}
+async function restoreBackup(){
+  var b=G.bk||await bkLoad();if(!b){G.msg='Aucune copie de sécurité.';gbox();return}
+  var t=tombs();
+  for(var i=0;i<b.friends.length;i++){delete t['f:'+b.friends[i].id];await put('friends',b.friends[i])}
+  for(var j=0;j<b.whiskies.length;j++){delete t['w:'+b.whiskies[j].id];await put('whiskies',b.whiskies[j])}
+  lsSet(TOMBKEY,t);G.msg='Copie de sécurité restaurée ('+b.whiskies.length+' fiche'+(b.whiskies.length>1?'s':'')+'). Synchronise pour l’envoyer sur le Drive.';render()}
+function planSync(files){
+  var P0=parseFiles(files),rdoc=P0.rdoc,rtomb=P0.rtomb,plan={up:[],down:[],delLocal:[],delRemote:[],mkTomb:[],conflicts:[]};
   var ldoc={};S.whiskies.forEach(function(o){ldoc['w:'+o.id]=o});S.friends.forEach(function(o){ldoc['f:'+o.id]=o});
   var lt=tombs(),keys={};
   [rdoc,rtomb,ldoc,lt].forEach(function(m){Object.keys(m).forEach(function(k){keys[k]=1})});
@@ -321,18 +356,20 @@ function syncErr(e){
   if(/drive 403/.test(m))return 'Google refuse l’accès : vérifie que « Google Drive API » est activée dans le projet Google Cloud. ('+m+')';
   if(/drive 401/.test(m)){G.tok='';return 'La connexion Google a expiré : touche de nouveau « Synchroniser ».'}
   return 'Échec de la synchronisation : '+m}
-async function doSync(){
-  if(G.busy)return;
+async function doSync(mode){
+  if(G.busy)return;mode=(mode==='send'||mode==='recv')?mode:'';G.confirm=null;
   G.busy=true;G.msg='Connexion à Google…';G.report=null;gbox();
   try{
     await loadGsi();var tok=await gToken();
     G.msg='Lecture du Drive…';gbox();
-    var files=await dList(tok),plan=planSync(files);
+    var files=await dList(tok),plan=mode?planForce(files,mode):planSync(files);
+    await safetyCopy(plan,mode);
     var rep={up:plan.up.length,down:plan.down.length,del:plan.delLocal.length+plan.delRemote.length,conflicts:plan.conflicts,names:{}};
     var tasks=[];
     plan.up.forEach(function(p){tasks.push(async function(){
-      var col=p.key[0]==='w'?'whiskies':'friends',id=p.key.slice(2),o=Object.assign({},p.o);if(!o.upd)o.upd=p.upd;
-      await dPut(tok,p.file?p.file.id:null,p.key[0]+'_'+id+'.json',p.upd,JSON.stringify(o))})});
+      var col=p.key[0]==='w'?'whiskies':'friends',id=p.key.slice(2),o=Object.assign({},p.o);if(!o.upd||mode==='send')o.upd=p.upd;
+      await dPut(tok,p.file?p.file.id:null,p.key[0]+'_'+id+'.json',p.upd,JSON.stringify(o));
+      if(mode==='send')await putRaw(col,o)})});
     plan.down.forEach(function(p){tasks.push(async function(){
       var o=await dGet(tok,p.file.id),col=p.key[0]==='w'?'whiskies':'friends';
       if(!o||!o.id)throw new Error('fichier du Drive illisible ('+p.file.name+')');
@@ -347,7 +384,7 @@ async function doSync(){
     if(pushed||!mf){await dPut(tok,mf?mf.id:null,'meta',now,'{}',devName());remote={at:now,by:devName()}}
     else remote={at:Number(mf.appProperties&&mf.appProperties.upd)||0,by:(mf.appProperties&&mf.appProperties.by)||''};
     lsSet(SYKEY,{at:now,by:devName(),n:S.whiskies.length,remote:remote});
-    G.report=rep;G.msg=tasks.length?'Synchronisation terminée.':'Déjà à jour : rien à envoyer ni à récupérer.';
+    G.report=rep;G.msg=mode==='send'?'Le Drive est maintenant identique à cet appareil.':mode==='recv'?'Cet appareil est maintenant identique au Drive.':tasks.length?'Synchronisation terminée.':'Déjà à jour : rien à envoyer ni à récupérer.';
     render();
   }catch(e){G.msg=syncErr(e)}
   G.busy=false;if(S.view==='exchange')gbox()}
@@ -363,6 +400,14 @@ function gbox(){
     var parts=[];if(r.up)parts.push(r.up+' envoyée'+(r.up>1?'s':''));if(r.down)parts.push(r.down+' récupérée'+(r.down>1?'s':''));if(r.del)parts.push(r.del+' suppression'+(r.del>1?'s':''));
     if(parts.length)h+='<p class="hint">Détail (fiches et amis) : '+parts.join(', ')+'.</p>';
     if(r.conflicts.length)h+='<div class="banner">Modifiées des deux côtés depuis la dernière synchronisation : '+r.conflicts.map(function(c){return esc(c.name||'ami')+(c.kept==='drive'?' (version du Drive gardée)':' (version de cet appareil gardée)')}).join(', ')+'. La modification la plus récente a été gardée.</div>'}
+  if(G.bk===undefined){G.bk=null;bkLoad().then(function(b){G.bk=b||null;gbox()})}
+  h+='<div class="row"><button type="button" class="btn ghost small" data-act="fopen" aria-expanded="'+!!G.fopen+'">Forcer un sens '+(G.fopen?'▴':'▾')+'</button></div>';
+  if(G.fopen){
+    h+='<div class="banner"><p class="hint">À n’utiliser que si la synchronisation normale ne convient pas (par exemple après une erreur). Aucune fusion : un côté remplace l’autre.</p>'+
+      '<div class="row"><button type="button" class="btn ghost" data-act="fsend"'+(G.busy?' disabled':'')+'>Envoyer cet appareil vers le Drive</button><button type="button" class="btn ghost" data-act="frecv"'+(G.busy?' disabled':'')+'>Récupérer depuis le Drive</button></div>';
+    if(G.confirm){h+='<p><b>'+(G.confirm==='send'?'Le Drive sera remplacé par le contenu de cet appareil : les fiches et amis du Drive absents ici seront supprimés du Drive.':'Cet appareil sera remplacé par le Drive : les fiches et amis absents du Drive seront supprimés ici. Une copie de sécurité de cet appareil est gardée avant le remplacement.')+'</b></p><div class="row"><button type="button" class="btn" data-act="fyes">Confirmer</button><button type="button" class="btn ghost" data-act="fno">Annuler</button></div>'}
+    h+='</div>'}
+  if(G.bk)h+='<p class="hint">Copie de sécurité sur cet appareil : '+fmtDT(G.bk.at)+' ('+esc(G.bk.reason)+', '+G.bk.whiskies.length+' fiche'+(G.bk.whiskies.length>1?'s':'')+', '+G.bk.friends.length+' ami'+(G.bk.friends.length>1?'s':'')+'). <button type="button" class="btn ghost small" data-act="bkrestore">Restaurer</button></p>';
   h+='<label class="chk"><input type="checkbox" data-g="auto"'+(lsGet(AUTOKEY,false)?' checked':'')+'> Synchroniser à la première touche après l’ouverture, si des modifications n’ont pas été envoyées ou après plus de 6 h. Une fenêtre Google s’ouvre alors brièvement.</label>';
   el.innerHTML=h}
 var AUTODONE=false;
@@ -371,7 +416,13 @@ document.addEventListener('pointerdown',function(){
   if(!lsGet(AUTOKEY,false))return;var i=syncInfo();
   if(i.at&&(syncDirty()||Date.now()-i.at>6*36e5))doSync()},{once:false});
 document.addEventListener('change',function(e){var t=e.target;if(t&&t.dataset&&t.dataset.g==='auto')lsSet(AUTOKEY,!!t.checked)});
-document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act="sync"]');if(b)doSync()});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;var a=b.dataset.act;
+  if(a==='sync')doSync();
+  else if(a==='fopen'){G.fopen=!G.fopen;G.confirm=null;gbox()}
+  else if(a==='fsend'||a==='frecv'){G.confirm=a==='fsend'?'send':'recv';gbox()}
+  else if(a==='fno'){G.confirm=null;gbox()}
+  else if(a==='fyes'){doSync(G.confirm)}
+  else if(a==='bkrestore'){restoreBackup()}});
 
 
 var AIT={msg:'',busy:false};
