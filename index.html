@@ -203,7 +203,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.6',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.7',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -674,18 +674,20 @@ function pasteImport(){
 
 /* lecture de l’étiquette */
 var LABEL_PROMPT=`Tu aides à remplir la fiche d'une bouteille de whisky à partir de la ou des photos de son étiquette (face avant, éventuellement contre-étiquette).
+Méthode : 1) lis tout ce qui est écrit ; 2) identifie le produit ; 3) une fois le produit identifié, complète les autres champs avec ta connaissance de ce whisky (c'est le but : remplir un maximum de champs utiles).
 Réponds uniquement par un objet JSON de cette forme :
 {"name":string|null,"distillery":string|null,"country":string|null,"type":string|null,"age":number|null,"abv":number|null,"volume":number|null,"profile":string[],"inferred":string[],"unreadable":boolean}
 Règles :
 - name : nom commercial complet tel qu'écrit (marque + cuvée), sans le volume ni le degré.
-- distillery : la distillerie si elle est écrite ou si tu connais ce produit avec certitude.
-- country : pays, avec la région si elle est connue (ex. "Écosse, Speyside", "Japon").
+- distillery : la distillerie qui produit ce whisky (écrite sur l'étiquette, ou connue : par exemple Caol Ila pour "Caol Ila 12 ans").
+- country : pays, avec la région ou l'île quand tu la connais (ex. "Écosse, Islay", "Écosse, Speyside", "Japon").
 - type : par exemple "Single malt", "Blended scotch", "Blended malt", "Single grain", "Bourbon", "Whisky japonais", "Coffey Malt".
-- age : nombre d'années si indiqué, sinon null. abv : degré en %. volume : en cl (0,7 L donne 70).
-- profile : au plus 4 mots parmi Fumé, Tourbé, Épicé, Fruité, Vanillé, Boisé, Floral, Maritime, Sherry, Doux, seulement si l'étiquette l'indique ou si tu connais très bien ce produit. Sinon [].
-- N'invente rien : une valeur illisible ou incertaine vaut null. Ne donne aucun prix.
-- inferred : les clés que tu déduis de ta connaissance du produit et que tu n'as pas lues sur l'étiquette (ex. ["distillery","country"]).
-- unreadable : true si les photos ne permettent pas d'identifier le whisky.`;
+- age : nombre d'années inscrit sur l'étiquette, sinon null (ne jamais deviner un âge). abv : degré en % ; s'il n'est pas lisible mais que le produit est connu, donne le degré habituel de cette cuvée. volume : en cl (0,7 L donne 70) ; sinon null.
+- profile : 3 à 6 mots qui décrivent le style de ce whisky tel que le décrivent les connaisseurs, en français, parmi par exemple : Fumé, Tourbé, Maritime, Iodé, Épicé, Poivré, Fruité, Agrumes, Vanillé, Miel, Floral, Boisé, Sherry, Doux, Malté, Fruits secs. Donne-les dès que tu connais le produit ou son style (région, type de fût).
+- Ne donne aucun prix et aucune note.
+- Si une valeur t'est vraiment inconnue, mets null. Mais si tu connais le produit, remplis.
+- inferred : toutes les clés que tu n'as pas lues sur l'étiquette mais déduites de ta connaissance (par exemple ["distillery","country","type","profile"]).
+- unreadable : true seulement si les photos ne permettent pas du tout d'identifier le whisky.`;
 /* clé et modèle : gardés sur cet appareil seulement (jamais envoyés sur le Drive ni sur GitHub) */
 var AIKEY='cave-ai-v1',AI_DEFAULT_MODEL='gemini-flash-latest';
 function aiCfg(){return lsGet(AIKEY,{})}
@@ -693,6 +695,16 @@ function aiKey(){return (aiCfg().key||'').trim()}
 function aiModel(){return (aiCfg().model||'').trim()||AI_DEFAULT_MODEL}
 function blobB64(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result).split(',')[1])};r.onerror=function(){rej(new Error('lecture impossible'))};r.readAsDataURL(b)})}
 async function geminiCall(parts,signal){
+  var delays=[2500,5000],last;
+  for(var t=0;t<=delays.length;t++){
+    try{return await geminiOnce(parts,signal)}
+    catch(e){last=e;var c=e&&e.code;
+      if(!(c==='network'||c==='http500'||c==='http502'||c==='http503'||c==='http504')||t===delays.length)throw e;
+      if(signal&&signal.aborted){var ce=new Error('cancelled');ce.code='cancelled';throw ce}
+      toast('Connexion difficile, nouvelle tentative…');
+      await new Promise(function(res){setTimeout(res,delays[t])})}}
+  throw last}
+async function geminiOnce(parts,signal){
   var r;
   try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(aiModel())+':generateContent',{method:'POST',signal:signal,
     headers:{'Content-Type':'application/json','x-goog-api-key':aiKey()},
@@ -711,6 +723,7 @@ async function readLabel(){
   try{
     var parts=[{text:LABEL_PROMPT}];
     for(var i=0;i<d.photos.length;i++){var p=d.photos[i],b=BLOBS.get(p);if(!b){var r=await fetch(photoSrc(p));b=await r.blob()}
+      try{b=await shrink(b,1200,.78)}catch(e){}
       parts.push({inline_data:{mime_type:b.type||'image/jpeg',data:await blobB64(b)}})}
     var txt=await geminiCall(parts,readCtl.signal),j;
     try{j=parseJsonLoose(txt)}catch(e){var pe=new Error('json');pe.code='invalid_json';throw pe}
@@ -736,9 +749,10 @@ function applyLabel(j){
 function aiErrText(e){
   var c=e&&e.code,d=(e&&e.detail)||'';
   if(c==='cancelled')return '';
-  if(c==='network')return 'Pas de connexion : réessaie quand le téléphone est en ligne.';
+  if(c==='network')return 'Connexion impossible après plusieurs essais : vérifie le réseau (Wi-Fi ou données) puis réessaie.';
   if(c==='http400'&&/API key|API_KEY/i.test(d))return 'Clé refusée : vérifie que tu l’as collée en entier.';
   if(c==='http401'||c==='http403')return 'Clé refusée ou accès non autorisé : vérifie la clé dans l’onglet Échange.';
+  if(c==='http503'||c==='http500')return 'Le service Google est surchargé : réessaie dans un instant.';
   if(c==='http404')return 'Modèle introuvable : change son nom dans l’onglet Échange (ou remets « '+AI_DEFAULT_MODEL+' »).';
   if(c==='http429')return 'Quota gratuit atteint : réessaie plus tard (la remise à zéro se fait chaque jour).';
   if(c==='invalid_json'||c==='empty')return 'Étiquette non lue. Reprends la photo de plus près.';
