@@ -1,6 +1,6 @@
 /* Service worker de Ma cave : l'appli fonctionne hors connexion.
    Changer VERSION à chaque mise à jour des fichiers pour renouveler le cache. */
-const VERSION = 'cave-v0.8';
+const VERSION = 'cave-v0.8.1';
 const FILES = ['./', './index.html', './manifest.webmanifest', './vendor/jszip.min.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
@@ -24,7 +24,7 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     // page : réseau d'abord (pour recevoir les mises à jour), sinon la copie en cache
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put('./index.html', copy)); return res; })
         .catch(() => caches.match('./index.html'))
     );
