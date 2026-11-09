@@ -204,7 +204,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.9',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.10',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -702,6 +702,21 @@ async function chatAnalyse(){
   }catch(e){if(e&&e.name==='AbortError')return}
   toast(copied?'Consigne copiée. Ouvre Claude ou Gemini, joins la photo et colle la consigne.':'Partage impossible ici : touche « Copier la consigne », puis ouvre Claude ou Gemini.');
 }
+/* au retour dans l'appli : si le dernier texte copié est une réponse au bon format, on remplit la fiche (une seule fois par texte) */
+var CLIP={last:'',launched:false,busy:false};
+function looksLikeAnswer(t){
+  var m=/\{[\s\S]*\}/.exec(t||'');if(!m)return false;
+  var j;try{j=JSON.parse(m[0])}catch(e){return false}
+  return !!(j&&typeof j==='object'&&typeof j.name==='string'&&j.name.trim()&&(j.distillery||j.country||j.type||(Array.isArray(j.profile)&&j.profile.length)||(Array.isArray(j.links)&&j.links.length)))}
+async function clipCheck(){
+  if(!CLIP.launched||S.view!=='form'||!S.draft||CLIP.busy||!$('#f-paste'))return;
+  CLIP.busy=true;
+  try{var t=((await navigator.clipboard.readText())||'').trim();
+    if(t&&t!==CLIP.last&&looksLikeAnswer(t)){CLIP.last=t;CLIP.launched=false;$('#f-paste').value=t;pasteImport()}
+  }catch(e){}
+  CLIP.busy=false}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')clipCheck()});
+window.addEventListener('focus',clipCheck);
 async function pasteClip(){
   var t='';
   try{t=await navigator.clipboard.readText()}catch(e){}
@@ -1134,8 +1149,8 @@ document.addEventListener('click',async function(e){
         case 'addlink':d.links=readLinks();d.links.push({label:'',url:'',note:''});linksBox();break;
     case 'paste':pasteImport();break;
     case 'read':readLabel();break;
-    case 'chat':chatAnalyse();break;
-    case 'copyprompt':{var ok=await copyText(chatPrompt());toast(ok?'Consigne copiée.':'Copie impossible : sélectionne le texte à la main.');break}
+    case 'chat':CLIP.launched=true;chatAnalyse();break;
+    case 'copyprompt':{CLIP.launched=true;var ok=await copyText(chatPrompt());toast(ok?'Consigne copiée.':'Copie impossible : sélectionne le texte à la main.');break}
     case 'pasteclip':pasteClip();break;
     case 'readstop':if(readCtl)readCtl.abort();break;
     case 'export':runExport();break;
