@@ -84,6 +84,7 @@ textarea{min-height:90px;resize:vertical}
 .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:.82rem;font-family:var(--f-mono)}
 /* list */
 #results{display:flex;flex-direction:column;gap:8px}
+.it-prof{margin-top:4px;font-size:.72rem;line-height:1.25;color:var(--muted);overflow-wrap:anywhere}
 .item{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .item:hover{border-color:var(--accent)}
 .thumb{width:56px;height:72px;border-radius:6px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;overflow:hidden}
@@ -204,7 +205,7 @@ var DB=null,ASSETS=null,SAMPLE=null,CAN_IMG=false,BLOBS=new WeakMap(),readCtl=nu
 
 /* ---------- storage ---------- */
 /* ---------- storage (IndexedDB sur l'appareil) ---------- */
-var APP_VERSION='0.10',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
+var APP_VERSION='0.11',APP_DATE='8 novembre 2026',IDBH=null,MEMONLY=false;
 function idbOpen(){return new Promise(function(res,rej){
   var r=indexedDB.open('cave-whisky',1);
   r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('whiskies',{keyPath:'id'});d.createObjectStore('friends',{keyPath:'id'})};
@@ -541,12 +542,13 @@ function applyFilters(){
   });
   return list;
 }
+function profLine(w){var t=(w.tags||[]).filter(Boolean);if(!t.length)return '';var more=t.length>4?' +'+(t.length-4):'';return '<div class="it-prof">'+t.slice(0,4).map(esc).join(' · ')+more+'</div>'}
 function itemHTML(w){
   var ph=w.photos&&w.photos[0];
   var sub=[w.type,w.country,w.abv!=null?fr(w.abv,1)+' %':''].filter(Boolean).join(' · ');
   var ov=w.ratings&&w.ratings.overall;
   return '<button class="item" data-act="open" data-id="'+esc(w.id)+'"><span class="thumb">'+(ph?'<img src="'+esc(photoSrc(ph))+'" alt="" loading="lazy">':GLASS)+'</span>'+
-    '<span><div class="it-name">'+esc(w.name)+'</div><div class="it-sub">'+esc(sub||'—')+'</div><div class="it-tags"><span class="pill st-'+esc(w.status||'sealed')+'">'+esc(STATUS[w.status]||STATUS.sealed)+'</span>'+(w.fav?'<span class="mark">★ préféré</span>':'')+(w.buy?'<span class="mark">◎ à acheter</span>':'')+'</div></span>'+
+    '<span><div class="it-name">'+esc(w.name)+'</div><div class="it-sub">'+esc(sub||'—')+'</div><div class="it-tags"><span class="pill st-'+esc(w.status||'sealed')+'">'+esc(STATUS[w.status]||STATUS.sealed)+'</span>'+(w.fav?'<span class="mark">★ préféré</span>':'')+(w.buy?'<span class="mark">◎ à acheter</span>':'')+'</div>'+profLine(w)+'</span>'+
     '<span class="score">'+(ov!=null?ov:'–')+'<small>/10</small></span></button>';
 }
 function renderResults(){
